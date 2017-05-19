@@ -11,6 +11,7 @@ import traceback
 
 from medusa import (
     app,
+    config,
     tv,
 )
 from medusa.helper.common import convert_size, try_int
@@ -220,6 +221,38 @@ class RarbgProvider(TorrentProvider):
         self.token = response.get('token')
         self.token_expires = datetime.datetime.now() + datetime.timedelta(minutes=14) if self.token else None
         return self.token is not None
+
+    def _create_default_search_string(self, show_scene_name, episode, search_string, add_string=None):
+        """Create a default search string, used for standard type S01E01 tv series."""
+
+        episode_string = config.naming_ep_type[2] % {
+            'seasonnumber': episode.scene_season,
+            'episodenumber': episode.scene_episode,
+        }
+        search_string['Episode'].append(episode_string.strip())
+
+    def _get_episode_search_strings(self, episode, add_string=''):
+        """Get episode search strings."""
+        if not episode:
+            return []
+
+        search_string = {
+            'Episode': [],
+            'EpisodeFallback': []
+        }
+
+        if not any([episode.show.air_by_date, episode.show.sports, episode.show.anime]):
+            self._create_default_search_string(None, episode, search_string, add_string=add_string)
+        else:
+            for show_name in episode.show.get_all_possible_names(season=episode.scene_season):
+                if episode.show.air_by_date:
+                    self._create_air_by_date_search_string(show_name, episode, search_string, add_string=add_string)
+                elif episode.show.sports:
+                    self._create_sports_search_string(show_name, episode, search_string, add_string=add_string)
+                else:
+                    self._create_anime_search_string(show_name, episode, search_string, add_string=add_string)
+
+        return [search_string]
 
 
 provider = RarbgProvider()
