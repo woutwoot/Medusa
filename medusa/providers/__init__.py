@@ -55,6 +55,7 @@ from medusa.providers.torrent import (
     torrentproject,
     torrentz2,
     tvchaosuk,
+    xbit,
     xthor,
     yggtorrent,
     zooqle
@@ -67,7 +68,7 @@ __all__ = [
     'nebulance', 'tvchaosuk', 'torrentproject', 'bitcannon', 'torrentz2', 'pretome', 'gftracker', 'anizb',
     'hdspace', 'newpct', 'elitetorrent', 'danishbits', 'hd4free', 'limetorrents', 'norbits', 'bithdtv',
     'zooqle', 'animebytes', 'animetorrents', 'horriblesubs', 'anidex', 'shanaproject', 'torrenting',
-    'yggtorrent', 'elitetracker', 'archetorrent'
+    'yggtorrent', 'elitetracker', 'archetorrent', 'xbit'
 ]
 
 

@@ -49,6 +49,7 @@ from medusa.providers.torrent.json import (
     rarbg,
     torrentday,
     xthor,
+    xbit,
 )
 from medusa.providers.torrent.rss import (
     nyaa,
@@ -66,5 +67,5 @@ __all__ = [
     'torrentbytes', 'torrentleech', 'nebulance', 'tvchaosuk', 'xthor', 'zooqle', 'bitcannon', 'btn', 'hd4free',
     'hdbits', 'norbits', 'rarbg', 'torrentday', 'torrentproject', 'nyaa', 'rsstorrent', 'shazbat', 'hebits',
     'torrentz2', 'animetorrents', 'horriblesubs', 'anidex', 'shanaproject', 'torrenting', 'yggtorrent',
-    'elitetracker'
+    'elitetracker', 'xbit'
 ]
