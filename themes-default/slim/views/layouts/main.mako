@@ -80,7 +80,7 @@
                     <%block name="content" />
                 </component>
             </div><!-- /content -->
-            <%include file="/partials/footer.mako" />
+            <app-footer></app-footer>
             <scroll-buttons></scroll-buttons>
 
           </div><!-- /globalLoading wrapper -->
@@ -136,6 +136,7 @@
             % endif
         </script>
         <%include file="/vue-components/sub-menu.mako"/>
+        <%include file="/vue-components/app-footer.mako"/>
         <%include file="/vue-components/quality-chooser.mako"/>
         <script>
             // @TODO: Remove this before v1.0.0
