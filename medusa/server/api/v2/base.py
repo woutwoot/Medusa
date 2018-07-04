@@ -1,11 +1,15 @@
 # coding=utf-8
 """Base module for request handlers."""
+from __future__ import division
+from __future__ import unicode_literals
 
 import base64
 import collections
 import json
+import logging
 import operator
 import traceback
+from builtins import object
 from datetime import date, datetime
 
 from babelfish.language import Language
@@ -14,10 +18,13 @@ import jwt
 
 from medusa import app
 
-from six import string_types, text_type
+from six import string_types, text_type, viewitems
 
 from tornado.httpclient import HTTPError
+from tornado.httputil import url_concat
 from tornado.web import RequestHandler
+
+log = logging.getLogger(__name__)
 
 
 class BaseRequestHandler(RequestHandler):
@@ -70,7 +77,7 @@ class BaseRequestHandler(RequestHandler):
         if app.DEVELOPER and 'exc_info' in kwargs:
             self.set_header('content-type', 'text/plain')
             self.set_status(500)
-            for line in traceback.format_exception(*kwargs["exc_info"]):
+            for line in traceback.format_exception(*kwargs['exc_info']):
                 self.write(line)
             self.finish()
         else:
@@ -262,9 +269,20 @@ class BaseRequestHandler(RequestHandler):
             headers['X-Pagination-Count'] = count
             results = results[start:end]
             next_page = None if end > count else arg_page + 1
-            last_page = ((count - 1) / arg_limit) + 1
+            last_page = ((count - 1) // arg_limit) + 1
             if last_page <= arg_page:
                 last_page = None
+
+        # Reconstruct the query parameters
+        query_params = []
+        for arg, values in viewitems(self.request.query_arguments):
+            if arg in ('page', 'limit'):
+                continue
+            if not isinstance(values, list):
+                values = [values]
+            query_params += [(arg, value) for value in values]
+
+        bare_uri = url_concat(self.request.path, query_params)
 
         links = []
         for rel, page in (('next', next_page), ('last', last_page),
@@ -272,9 +290,8 @@ class BaseRequestHandler(RequestHandler):
             if page is None:
                 continue
 
-            delimiter = '&' if self.request.query_arguments else '?'
-            link = '<{uri}{delimiter}page={page}&limit={limit}>; rel="{rel}"'.format(
-                uri=self.request.uri, delimiter=delimiter, page=page, limit=arg_limit, rel=rel)
+            uri = url_concat(bare_uri, dict(page=page, limit=arg_limit))
+            link = '<{uri}>; rel="{rel}"'.format(uri=uri, rel=rel)
             links.append(link)
 
         self.set_header('Link', ', '.join(links))
@@ -351,7 +368,7 @@ def iter_nested_items(data, prefix=''):
 
     Nested keys are separated with dots.
     """
-    for key, value in data.items():
+    for key, value in viewitems(data):
         p = prefix + key
         if isinstance(value, collections.Mapping):
             for inner_key, inner_value in iter_nested_items(value, prefix=p + '.'):
@@ -372,18 +389,19 @@ def set_nested_value(data, key, value):
 class PatchField(object):
     """Represent a field to be patched."""
 
-    def __init__(self, target_type, attr, attr_type,
-                 validator=None, converter=None, default_value=None, post_processor=None):
+    def __init__(self, target, attr, attr_type, validator=None, converter=None,
+                 default_value=None, setter=None, post_processor=None):
         """Constructor."""
-        if not hasattr(target_type, attr):
-            raise ValueError('{0!r} has no attribute {1}'.format(target_type, attr))
+        if not hasattr(target, attr):
+            raise ValueError('{0!r} has no attribute {1}'.format(target, attr))
 
-        self.target_type = target_type
+        self.target = target
         self.attr = attr
         self.attr_type = attr_type
         self.validator = validator or (lambda v: isinstance(v, self.attr_type))
         self.converter = converter or (lambda v: v)
         self.default_value = default_value
+        self.setter = setter
         self.post_processor = post_processor
 
     def patch(self, target, value):
@@ -395,7 +413,20 @@ class PatchField(object):
             valid = True
 
         if valid:
-            setattr(target, self.attr, self.converter(value))
+            try:
+                if self.setter:
+                    self.setter(target, self.attr, self.converter(value))
+                else:
+                    setattr(target, self.attr, self.converter(value))
+            except AttributeError:
+                log.warning(
+                    'Error trying to change attribute %s on target %s, you sure'
+                    ' you are allowed to change this attribute?',
+                    self.attr,
+                    target
+                )
+                return False
+
             if self.post_processor:
                 self.post_processor(value)
             return True
@@ -404,44 +435,49 @@ class PatchField(object):
 class StringField(PatchField):
     """Patch string fields."""
 
-    def __init__(self, target_type, attr, validator=None, converter=None, default_value=None, post_processor=None):
+    def __init__(self, target, attr, validator=None, converter=None, default_value=None,
+                 setter=None, post_processor=None):
         """Constructor."""
-        super(StringField, self).__init__(target_type, attr, string_types, validator=validator, converter=converter,
-                                          default_value=default_value, post_processor=post_processor)
+        super(StringField, self).__init__(target, attr, string_types, validator=validator, converter=converter,
+                                          default_value=default_value, setter=setter, post_processor=post_processor)
 
 
 class IntegerField(PatchField):
     """Patch integer fields."""
 
-    def __init__(self, target_type, attr, validator=None, converter=None, default_value=None, post_processor=None):
+    def __init__(self, target, attr, validator=None, converter=None, default_value=None,
+                 setter=None, post_processor=None):
         """Constructor."""
-        super(IntegerField, self).__init__(target_type, attr, int, validator=validator, converter=converter,
-                                           default_value=default_value, post_processor=post_processor)
+        super(IntegerField, self).__init__(target, attr, int, validator=validator, converter=converter,
+                                           default_value=default_value, setter=setter, post_processor=post_processor)
 
 
 class ListField(PatchField):
     """Patch list fields."""
 
-    def __init__(self, target_type, attr, validator=None, converter=None, default_value=None, post_processor=None):
+    def __init__(self, target, attr, validator=None, converter=None, default_value=None,
+                 setter=None, post_processor=None):
         """Constructor."""
-        super(ListField, self).__init__(target_type, attr, list, validator=validator, converter=converter,
-                                        default_value=default_value, post_processor=post_processor)
+        super(ListField, self).__init__(target, attr, list, validator=validator, converter=converter,
+                                        default_value=default_value, setter=setter, post_processor=post_processor)
 
 
 class BooleanField(PatchField):
     """Patch boolean fields."""
 
-    def __init__(self, target_type, attr, validator=None, converter=int, default_value=None, post_processor=None):
+    def __init__(self, target, attr, validator=None, converter=int, default_value=None,
+                 setter=None, post_processor=None):
         """Constructor."""
-        super(BooleanField, self).__init__(target_type, attr, bool, validator=validator, converter=converter,
-                                           default_value=default_value, post_processor=post_processor)
+        super(BooleanField, self).__init__(target, attr, bool, validator=validator, converter=converter,
+                                           default_value=default_value, setter=setter, post_processor=post_processor)
 
 
 class EnumField(PatchField):
     """Patch enumeration fields."""
 
-    def __init__(self, target_type, attr, enums, attr_type=text_type,
-                 converter=None, default_value=None, post_processor=None):
+    def __init__(self, target, attr, enums, attr_type=text_type, converter=None,
+                 default_value=None, setter=None, post_processor=None):
         """Constructor."""
-        super(EnumField, self).__init__(target_type, attr, attr_type, validator=lambda v: v in enums,
-                                        converter=converter, default_value=default_value, post_processor=post_processor)
+        super(EnumField, self).__init__(target, attr, attr_type, validator=lambda v: v in enums,
+                                        converter=converter, default_value=default_value,
+                                        setter=setter, post_processor=post_processor)

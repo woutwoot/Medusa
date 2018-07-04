@@ -5,6 +5,7 @@
 from __future__ import unicode_literals
 
 import logging
+import re
 
 from medusa import tv
 from medusa.bs4_parser import BS4Parser
@@ -24,6 +25,8 @@ log.logger.addHandler(logging.NullHandler())
 class Torrent9Provider(TorrentProvider):
     """Torrent9 Torrent provider."""
 
+    non_words = re.compile(r'\W')
+
     def __init__(self):
         """Initialize the class."""
         super(Torrent9Provider, self).__init__('Torrent9')
@@ -32,11 +35,11 @@ class Torrent9Provider(TorrentProvider):
         self.public = True
 
         # URLs
-        self.url = 'http://www.torrents9.pe'
+        self.url = 'http://www.torrent9.red'
         self.urls = {
             'search': urljoin(self.url, '/search_torrent/{query}.html'),
             'daily': urljoin(self.url, '/torrents_series.html,trie-date-d'),
-            'download': urljoin(self.url, '{link}.torrent'),
+            'download': urljoin(self.url, '/get_torrent/{name}.torrent'),
         }
 
         # Proper Strings
@@ -70,7 +73,7 @@ class Torrent9Provider(TorrentProvider):
                 if mode != 'RSS':
                     log.debug('Search string: {search}',
                               {'search': search_string})
-                    search_query = search_string.replace('.', '-').replace(' ', '-')
+                    search_query = Torrent9Provider.non_words.sub('-', search_string)
                     search_url = self.urls['search'].format(query=search_query)
                 else:
                     search_url = self.urls['daily']
@@ -99,21 +102,20 @@ class Torrent9Provider(TorrentProvider):
         items = []
 
         with BS4Parser(data, 'html5lib') as html:
-            table_header = html.find('thead')
+            table_body = html.find('tbody')
+
             # Continue only if at least one release is found
-            if not table_header:
+            if not table_body:
                 log.debug('Data returned from provider does not contain any torrents')
                 return items
 
-            # Nom du torrent, Taille, Seed, Leech
-            labels = [label.get_text() for label in table_header('th')]
-
-            table_body = html.find('tbody')
             for row in table_body('tr'):
                 cells = row('td')
+                if len(cells) < 4:
+                    continue
 
                 try:
-                    info_cell = cells[labels.index('Nom du torrent')].a
+                    info_cell = cells[0].a
                     title = info_cell.get_text()
                     download_url = info_cell.get('href')
                     if not all([title, download_url]):
@@ -121,11 +123,11 @@ class Torrent9Provider(TorrentProvider):
 
                     title = '{name} {codec}'.format(name=title, codec='x264')
 
-                    download_link = download_url.replace('/torrent', 'get_torrent')
-                    download_url = self.urls['download'].format(link=download_link)
+                    download_name = download_url.rsplit('/', 1)[1]
+                    download_url = self.urls['download'].format(name=download_name)
 
-                    seeders = try_int(cells[labels.index('Seed')].get_text(strip=True))
-                    leechers = try_int(cells[labels.index('Leech')].get_text(strip=True))
+                    seeders = try_int(cells[2].get_text(strip=True))
+                    leechers = try_int(cells[3].get_text(strip=True))
 
                     # Filter unseeded torrent
                     if seeders < min(self.minseed, 1):
@@ -135,7 +137,7 @@ class Torrent9Provider(TorrentProvider):
                                       title, seeders)
                         continue
 
-                    torrent_size = cells[labels.index('Taille')].get_text()
+                    torrent_size = cells[1].get_text()
                     size = convert_size(torrent_size, units=units) or -1
 
                     item = {

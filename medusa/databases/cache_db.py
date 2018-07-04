@@ -1,6 +1,16 @@
 # coding=utf-8
 
+from __future__ import unicode_literals
+
+import logging
+
 from medusa import db
+from medusa.databases import utils
+from medusa.logger.adapters.style import BraceAdapter
+
+
+log = BraceAdapter(logging.getLogger(__name__))
+log.logger.addHandler(logging.NullHandler())
 
 
 # Add new migrations at the bottom of the list
@@ -13,7 +23,8 @@ class InitialSchema(db.SchemaUpgrade):
         queries = [
             ("CREATE TABLE lastUpdate (provider TEXT, time NUMERIC);",),
             ("CREATE TABLE lastSearch (provider TEXT, time NUMERIC);",),
-            ("CREATE TABLE scene_exceptions (exception_id INTEGER PRIMARY KEY, indexer_id INTEGER, show_name TEXT, season NUMERIC DEFAULT -1, custom NUMERIC DEFAULT 0);",),
+            ("CREATE TABLE scene_exceptions (exception_id INTEGER PRIMARY KEY, indexer_id INTEGER,"
+             " show_name TEXT, season NUMERIC DEFAULT -1, custom NUMERIC DEFAULT 0);",),
             ("CREATE TABLE scene_names (indexer_id INTEGER, name TEXT);",),
             ("CREATE TABLE network_timezones (network_name TEXT PRIMARY KEY, timezone TEXT);",),
             ("CREATE TABLE scene_exceptions_refresh (list TEXT PRIMARY KEY, last_refreshed INTEGER);",),
@@ -92,8 +103,10 @@ class ConvertSceneExeptionsToIndexerScheme(AddSceneExceptionsRefresh):  # pylint
     def execute(self):
         self.connection.action("DROP TABLE IF EXISTS tmp_scene_exceptions;")
         self.connection.action("ALTER TABLE scene_exceptions RENAME TO tmp_scene_exceptions;")
-        self.connection.action("CREATE TABLE scene_exceptions (exception_id INTEGER PRIMARY KEY, indexer_id INTEGER, show_name TEXT, season NUMERIC DEFAULT -1, custom NUMERIC DEFAULT 0);")
-        self.connection.action("INSERT INTO scene_exceptions SELECT exception_id, tvdb_id as indexer_id, show_name, season, custom FROM tmp_scene_exceptions;")
+        self.connection.action("CREATE TABLE scene_exceptions (exception_id INTEGER PRIMARY KEY, indexer_id INTEGER,"
+                               " show_name TEXT, season NUMERIC DEFAULT -1, custom NUMERIC DEFAULT 0);")
+        self.connection.action("INSERT INTO scene_exceptions SELECT exception_id, tvdb_id as indexer_id, show_name,"
+                               " season, custom FROM tmp_scene_exceptions;")
         self.connection.action("DROP TABLE tmp_scene_exceptions;")
 
 
@@ -131,3 +144,57 @@ class AddIndexerSceneExceptions(RemoveIndexerUpdateSchema):  # pylint:disable=to
             "INSERT INTO scene_exceptions SELECT exception_id, 1, indexer_id, show_name, season,"
             "custom FROM tmp_scene_exceptions;")
         self.connection.action("DROP TABLE tmp_scene_exceptions;")
+
+
+class AddIndexerIds(AddIndexerSceneExceptions):
+    """
+    Add the indexer_id to all table's that have a series_id already.
+
+    If the current series_id is named indexer_id or indexerid, use the field `indexer` for now.
+    The namings should be renamed to: indexer_id + series_id in a later iteration.
+
+    For example in this case, the table scene_names has used the fieldname `indexer_id` for the series id.
+    This is unfortunate, but we can change that later.
+    """
+
+    def test(self):
+        """Test if the table history already has the indexer_id."""
+        return self.hasColumn('scene_names', 'indexer')
+
+    def execute(self):
+        # Add the indexer column to the scene_names table.
+        self.addColumn('scene_names', 'indexer', 'NUMERIC', -1)
+
+        # clean up null values from the scene_exceptions_table
+        self.connection.action("DELETE FROM scene_exceptions WHERE indexer = '' OR indexer IS NULL;")
+
+
+class ClearProviderTables(AddIndexerIds):
+    """Clear provider cache items by deleting their tables."""
+
+    def test(self):
+        """Test if the version is at least 2."""
+        return self.connection.version >= (2, None)
+
+    def execute(self):
+        utils.backup_database(self.connection.path, self.connection.version)
+
+        self.clear_provider_tables()
+        self.inc_major_version()
+
+        log.info('Updated to: {}.{}', *self.connection.version)
+
+    def clear_provider_tables(self):
+        providers = self.connection.select(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('lastUpdate',"
+            " 'lastSearch', 'scene_names', 'network_timezones', 'scene_exceptions_refresh',"
+            " 'db_version', 'scene_exceptions', 'last_update');")
+
+        for provider in providers:
+            self.connection.action("DELETE FROM '{name}';".format(name=provider[b'name']))
+
+    def inc_major_version(self):
+        major_version, minor_version = self.connection.version
+        major_version += 1
+        self.connection.action("UPDATE db_version SET db_version = ?;", [major_version])
+        return self.connection.version

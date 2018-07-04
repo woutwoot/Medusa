@@ -1,6 +1,5 @@
 # coding=utf-8
 # Author: Nic Wolfe <nic@wolfeden.ca>
-
 #
 # This file is part of Medusa.
 #
@@ -17,34 +16,26 @@
 # You should have received a copy of the GNU General Public License
 # along with Medusa. If not, see <http://www.gnu.org/licenses/>.
 
-import os.path
+from __future__ import unicode_literals
+
+
+import os
 import re
 import sqlite3
 import threading
 import time
 import warnings
+from builtins import object
+from builtins import str
 
 from medusa import app, logger
 from medusa.helper.exceptions import ex
 
-from six import text_type
+from six import itervalues, text_type
+
 
 db_cons = {}
 db_locks = {}
-
-
-def dbFilename(filename=None, suffix=None):
-    """
-    @param filename: The sqlite database filename to use. If not specified,
-                     will be made to be application db file
-    @param suffix: The suffix to append to the filename. A '.' will be added
-                   automatically, i.e. suffix='v0' will make dbfile.db.v0
-    @return: the correct location of the database file.
-    """
-    filename = filename or app.APPLICATION_DB
-    if suffix:
-        filename = "%s.%s" % (filename, suffix)
-    return os.path.join(app.DATA_DIR, filename)
 
 
 class DBConnection(object):
@@ -58,7 +49,7 @@ class DBConnection(object):
             if self.filename not in db_cons or not db_cons[self.filename]:
                 db_locks[self.filename] = threading.Lock()
 
-                self.connection = sqlite3.connect(dbFilename(self.filename, self.suffix), 20, check_same_thread=False)
+                self.connection = sqlite3.connect(self.path, 20, check_same_thread=False)
                 self.connection.text_factory = DBConnection._unicode_text_factory
 
                 db_cons[self.filename] = self.connection
@@ -75,10 +66,26 @@ class DBConnection(object):
                 self._set_row_factory()
 
         except sqlite3.OperationalError:
-            logger.log(u'Please check your database owner/permissions: {}'.format(dbFilename(self.filename, self.suffix)), logger.WARNING)
+            logger.log(u'Please check your database owner/permissions: {}'.format(
+                       self.path, logger.WARNING))
         except Exception as e:
             logger.log(u"DB error: " + ex(e), logger.ERROR)
             raise
+
+    @property
+    def path(self):
+        """
+        @param filename: The sqlite database filename to use. If not specified,
+                        will be made to be application db file
+        @param suffix: The suffix to append to the filename. A '.' will be added
+                    automatically, i.e. suffix='v0' will make dbfile.db.v0
+        @return: the path to the database file.
+        """
+        filename = self.filename
+        if self.suffix:
+            filename = '%s.%s' % (filename, self.suffix)
+
+        return os.path.join(app.DATA_DIR, filename)
 
     def _set_row_factory(self):
         """
@@ -153,7 +160,7 @@ class DBConnection(object):
             return None
 
         if result:
-            return int(result[0]["db_version"])
+            return int(result[0][b'db_version'])
         else:
             return None
 
@@ -172,7 +179,7 @@ class DBConnection(object):
             return None
 
         if result:
-            return int(result[0]["db_minor_version"])
+            return int(result[0][b'db_minor_version'])
         else:
             return None
 
@@ -193,9 +200,8 @@ class DBConnection(object):
         :param fetchall: Boolean, when using a select query force returning all results
         :return: list of results
         """
-        querylist = querylist or []
-        # remove None types
-        querylist = [i for i in querylist if i is not None and len(i)]
+        # Remove Falsey types
+        querylist = (q for q in querylist or [] if q)
 
         sql_results = []
         attempt = 0
@@ -214,14 +220,13 @@ class DBConnection(object):
                                 logger.log(qu[0] + " with args " + str(qu[1]), logger.DEBUG)
                             sql_results.append(self._execute(qu[0], qu[1], fetchall=fetchall))
                     self.connection.commit()
-                    logger.log(u"Transaction with " + str(len(querylist)) + u" queries executed", logger.DEBUG)
+                    logger.log(u"Transaction with " + str(len(sql_results)) + u" queries executed", logger.DEBUG)
 
                     # finished
                     break
                 except sqlite3.OperationalError as e:
                     sql_results = []
-                    if self.connection:
-                        self.connection.rollback()
+                    self._try_rollback()
                     if "unable to open database file" in e.args[0] or "database is locked" in e.args[0]:
                         logger.log(u"DB error: " + ex(e), logger.WARNING)
                         attempt += 1
@@ -231,14 +236,25 @@ class DBConnection(object):
                         raise
                 except sqlite3.DatabaseError as e:
                     sql_results = []
-                    if self.connection:
-                        self.connection.rollback()
+                    self._try_rollback()
                     logger.log(u"Fatal error executing query: " + ex(e), logger.ERROR)
                     raise
 
             # time.sleep(0.02)
 
             return sql_results
+
+    def _try_rollback(self):
+        if not self.connection:
+            return
+        try:
+            self.connection.rollback()
+        except sqlite3.OperationalError as error:
+            # See https://github.com/pymedusa/Medusa/issues/3190
+            if 'no transaction is active' in error.args[0]:
+                logger.log("Rollback not needed, skipping", logger.DEBUG)
+            else:
+                logger.log("Failed to perform rollback: {error!r}".format(error=error), logger.ERROR)
 
     def action(self, query, args=None, fetchall=False, fetchone=False):
         """
@@ -329,17 +345,18 @@ class DBConnection(object):
 
         changesBefore = self.connection.total_changes
 
-        genParams = lambda myDict: [x + " = ?" for x in myDict.keys()]
+        def gen_params(my_dict):
+            return [x + " = ?" for x in my_dict]
 
-        query = "UPDATE [" + tableName + "] SET " + ", ".join(genParams(valueDict)) + " WHERE " + " AND ".join(
-            genParams(keyDict))
+        query = "UPDATE [" + tableName + "] SET " + ", ".join(gen_params(valueDict)) + " WHERE " + " AND ".join(
+            gen_params(keyDict))
 
-        self.action(query, valueDict.values() + keyDict.values())
+        self.action(query, list(itervalues(valueDict)) + list(itervalues(keyDict)))
 
         if self.connection.total_changes == changesBefore:
-            query = "INSERT INTO [" + tableName + "] (" + ", ".join(valueDict.keys() + keyDict.keys()) + ")" + \
-                    " VALUES (" + ", ".join(["?"] * len(valueDict.keys() + keyDict.keys())) + ")"
-            self.action(query, valueDict.values() + keyDict.values())
+            query = "INSERT INTO [" + tableName + "] (" + ", ".join(list(valueDict) + list(keyDict)) + ")" + \
+                    " VALUES (" + ", ".join(["?"] * len(list(valueDict) + list(keyDict))) + ")"
+            self.action(query, list(itervalues(valueDict)) + list(itervalues(keyDict)))
 
     def tableInfo(self, tableName):
         """
@@ -351,7 +368,7 @@ class DBConnection(object):
         sql_results = self.select("PRAGMA table_info(`%s`)" % tableName)
         columns = {}
         for column in sql_results:
-            columns[column['name']] = {'type': column['type']}
+            columns[column[b'name']] = {'type': column[b'type']}
         return columns
 
     @staticmethod
@@ -437,22 +454,6 @@ def upgradeDatabase(connection, schema):
 
 def prettyName(class_name):
     return ' '.join([x.group() for x in re.finditer("([A-Z])([a-z0-9]+)", class_name)])
-
-
-def restoreDatabase(version):
-    """
-    Restores a database to a previous version (backup file of version must still exist)
-
-    :param version: Version to restore to
-    :return: True if restore succeeds, False if it fails
-    """
-    from medusa import helpers
-    logger.log(u"Restoring database before trying upgrade again")
-    if not helpers.restore_versioned_file(dbFilename(suffix='v' + str(version)), version):
-        logger.log_error_and_exit(u"Database restore failed, abort upgrading database")
-        return False
-    else:
-        return True
 
 
 def _processUpgrade(connection, upgradeClass):

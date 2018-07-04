@@ -1,8 +1,11 @@
 # coding=utf-8
 
 """All providers type init."""
+from __future__ import unicode_literals
 
 import pkgutil
+from builtins import next
+from builtins import zip
 from os import sys
 from random import shuffle
 
@@ -17,14 +20,14 @@ from medusa.providers.torrent import (
     animebytes,
     animetorrents,
     archetorrent,
+    avistaz,
     bitcannon,
     bithdtv,
+    bjshare,
     btn,
+    cinemaz,
     danishbits,
-    elitetorrent,
     elitetracker,
-    gftracker,
-    hd4free,
     hdbits,
     hdspace,
     hdtorrents,
@@ -38,6 +41,7 @@ from medusa.providers.torrent import (
     norbits,
     nyaa,
     pretome,
+    privatehd,
     rarbg,
     scenetime,
     sdbits,
@@ -52,7 +56,6 @@ from medusa.providers.torrent import (
     torrentday,
     torrenting,
     torrentleech,
-    torrentproject,
     torrentz2,
     tvchaosuk,
     xbit,
@@ -63,18 +66,18 @@ from medusa.providers.torrent import (
 
 __all__ = [
     'btn', 'thepiratebay', 'torrentleech', 'hdtorrents', 'torrentday', 'hdbits',
-    'speedcd', 'nyaa', 'torrentbytes', 'torrent9', 'morethantv', 'tokyotoshokan', 'iptorrents', 'hebits',
-    'alpharatio', 'sdbits', 'shazbat', 'rarbg', 'tntvillage', 'binsearch', 'xthor', 'abnormal', 'scenetime',
-    'nebulance', 'tvchaosuk', 'torrentproject', 'bitcannon', 'torrentz2', 'pretome', 'gftracker', 'anizb',
-    'hdspace', 'newpct', 'elitetorrent', 'danishbits', 'hd4free', 'limetorrents', 'norbits', 'bithdtv',
+    'speedcd', 'nyaa', 'torrentbytes', 'torrent9', 'morethantv', 'tokyotoshokan', 'iptorrents',
+    'hebits', 'alpharatio', 'sdbits', 'shazbat', 'rarbg', 'tntvillage', 'binsearch', 'xthor',
+    'abnormal', 'scenetime', 'nebulance', 'tvchaosuk', 'bitcannon', 'torrentz2', 'pretome', 'anizb',
+    'hdspace', 'newpct', 'danishbits', 'limetorrents', 'norbits', 'bithdtv',
     'zooqle', 'animebytes', 'animetorrents', 'horriblesubs', 'anidex', 'shanaproject', 'torrenting',
-    'yggtorrent', 'elitetracker', 'archetorrent', 'xbit'
+    'yggtorrent', 'elitetracker', 'archetorrent', 'privatehd', 'cinemaz', 'avistaz', 'bjshare', 'xbit'
 ]
 
 
 def sorted_provider_list(randomize=False):
-    initial_list = app.providerList + app.newznabProviderList + app.torrentRssProviderList
-    provider_dict = dict(zip([x.get_id() for x in initial_list], initial_list))
+    initial_list = app.providerList + app.newznabProviderList + app.torrentRssProviderList + app.torznab_providers_list
+    provider_dict = dict(list(zip([x.get_id() for x in initial_list], initial_list)))
 
     new_list = []
 
@@ -112,9 +115,9 @@ def get_provider_module(name):
         if name in __all__ and prefix + name in sys.modules:
             return sys.modules[prefix + name]
 
-    raise Exception("Can't find " + prefix + name + " in " + "Providers")
+    raise Exception("Can't find {prefix}{name} in Providers".format(prefix=prefix, name=name))
 
 
 def get_provider_class(provider_id):
-    provider_list = app.providerList + app.newznabProviderList + app.torrentRssProviderList
+    provider_list = app.providerList + app.newznabProviderList + app.torrentRssProviderList + app.torznab_providers_list
     return next((provider for provider in provider_list if provider.get_id() == provider_id), None)

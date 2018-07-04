@@ -16,13 +16,14 @@
 # You should have received a copy of the GNU General Public License
 # along with Medusa. If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import unicode_literals
+
+from builtins import object
 from mimetypes import guess_type
 from os.path import isfile, join, normpath
 
 from medusa import app, image_cache
-from medusa.helper.common import try_int
 from medusa.helper.exceptions import MultipleShowObjectsException
-from medusa.show.show import Show
 
 
 class GenericMedia(object):
@@ -31,20 +32,32 @@ class GenericMedia(object):
     img_type = None
     default_media_name = ''
 
-    def __init__(self, indexer_id, media_format='normal'):
+    def __init__(self, series_obj, media_format='normal', fallback=True):
         """
         Initialize media for a series.
 
-        :param indexer_id: The indexer id of the show
+        :param series_obj: The series object.
         :param media_format: The format of the media to get. Must be either 'normal' or 'thumb'
+        :param fallback: Fallback to the default media if requested media doesn't exist
         """
 
-        self.indexer_id = try_int(indexer_id, 0)
+        self.series_obj = series_obj
+        self.series_id = series_obj.series_id
 
         if media_format in ('normal', 'thumb'):
             self.media_format = media_format
         else:
             self.media_format = 'normal'
+
+        self.fallback = fallback
+
+    @property
+    def indexerid(self):
+        return self.series_id
+
+    @indexerid.setter
+    def indexerid(self, value):
+        self.series_id = value
 
     @property
     def media(self):
@@ -62,14 +75,14 @@ class GenericMedia(object):
     def media_path(self):
         """Get the relative path to the media."""
         if self.series:
-            return image_cache.get_path(self.img_type, self.indexer_id)
+            return image_cache.get_path(self.img_type, self.series_obj)
         else:
             return ''
 
     @staticmethod
     def get_media_root():
         """Get the root folder containing the media."""
-        return join(app.PROG_DIR, 'static')
+        return join(app.THEME_DATA_ROOT, 'assets')
 
     @property
     def media_type(self):
@@ -85,7 +98,7 @@ class GenericMedia(object):
     def series(self):
         """Find the series by indexer id."""
         try:
-            return Show.find(app.showList, self.indexer_id)
+            return self.series_obj
         except MultipleShowObjectsException:
             return None
 
@@ -97,7 +110,9 @@ class GenericMedia(object):
 
             if isfile(media_path):
                 return normpath(media_path)
+            elif not self.fallback:
+                return ''
 
-        image_path = join(self.get_media_root(), 'images', self.default_media_name)
+        image_path = join(self.get_media_root(), 'img', self.default_media_name)
 
         return image_path.replace('\\', '/')

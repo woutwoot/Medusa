@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """Guessit Name Parser."""
+from __future__ import unicode_literals
 
 import re
 from datetime import timedelta
@@ -26,7 +27,7 @@ expected_groups = [
     '20-40',
 ]
 
-allowed_languages = {
+allowed_languages = [
     'de',
     'en',
     'es',
@@ -45,12 +46,12 @@ allowed_languages = {
     'uk',
     'mul',  # multi language
     'und',  # undetermined
-}
+]
 
-allowed_countries = {
+allowed_countries = [
     'us',
     'gb',
-}
+]
 
 series_re = re.compile(r'^(?P<series>.*?)(?: \(?(?:(?P<year>\d{4})|(?P<country>[A-Z]{2}))\)?)?$')
 

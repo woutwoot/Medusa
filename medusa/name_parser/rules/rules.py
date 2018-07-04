@@ -26,15 +26,18 @@ according to our needs.
 have a fixed execution order, that's why the rules() method should add the rules in the correct order (explicit).
 *** Rebulk API relies on the match.value, if you change them you'll get exceptions.
 """
+from __future__ import unicode_literals
 
 import copy
 import logging
 import re
+from builtins import range
 
 from guessit.rules.common.comparators import marker_sorted
 from guessit.rules.common.formatters import cleanup
 from guessit.rules.properties import website
 from guessit.rules.properties.release_group import clean_groupname
+
 from rebulk.processors import POST_PROCESS
 from rebulk.rebulk import Rebulk
 from rebulk.rules import AppendMatch, RemoveMatch, RenameMatch, Rule
@@ -51,7 +54,7 @@ class BlacklistedReleaseGroup(Rule):
 
     priority = POST_PROCESS
     consequence = RemoveMatch
-    blacklist = ('private', 'req', 'no.rar', 'season')
+    blacklist = (b'private', b'req', b'no.rar', b'season')
 
     def when(self, matches, context):
         """Evaluate the rule.
@@ -396,8 +399,8 @@ class CreateAliasWithAlternativeTitles(Rule):
             for alternative_title in alternative_titles:
                 holes = matches.holes(start=previous.end, end=alternative_title.start)
                 # if the separator is a dash, add an extra space before and after
-                separators = [' ' + h.value + ' ' if h.value == '-' else h.value for h in holes]
-                separator = ' '.join(separators) if separators else ' '
+                separators = [b' ' + h.value + b' ' if h.value == b'-' else h.value for h in holes]
+                separator = b' '.join(separators) if separators else b' '
                 alias.value += separator + alternative_title.value
 
                 previous = alternative_title
@@ -480,7 +483,7 @@ class CreateAliasWithCountryOrYear(Rule):
             if next_match:
                 alias = copy.copy(title)
                 alias.name = 'alias'
-                alias.value = alias.value + ' ' + re.sub(r'\W*', '', str(after_title.raw))
+                alias.value = alias.value + b' ' + re.sub(r'\W*', b'', after_title.raw)
                 alias.end = after_title.end
                 alias.raw_end = after_title.raw_end
                 return [alias]
@@ -1212,8 +1215,8 @@ class AvoidMultipleValuesRule(Rule):
                     to_remove.extend(matches.named('title', predicate=lambda match: match.value != values[0].value))
                     continue
 
-                log.info(u"Guessed more than one '%s' for '%s': %s",
-                         name, matches.input_string, u','.join(unique_values), exc_info=False)
+                log.debug(u"Guessed more than one '%s' for '%s': %s",
+                          name, matches.input_string, ','.join(unique_values), exc_info=False)
                 to_remove.extend(values)
 
         return to_remove
@@ -1317,12 +1320,12 @@ class ReleaseGroupPostProcessor(Rule):
         for release_group in release_groups:
             value = release_group.value
             for regex in self.regexes:
-                value = regex.sub(' ', value).strip()
+                value = regex.sub(b' ', value).strip()
                 if not value:
                     break
 
             if value and matches.tagged('scene') and not matches.next(release_group):
-                value = value.split('-')[0]
+                value = value.split(b'-')[0]
 
             if release_group.value != value:
                 to_remove.append(release_group)

@@ -130,13 +130,16 @@ class BTNProvider(TorrentProvider):
 
             size = row.get('Size') or -1
 
+            pubdate_raw = row.get('Time')
+            pubdate = self.parse_pubdate(pubdate_raw, fromtimestamp=True)
+
             item = {
                 'title': title,
                 'link': download_url,
                 'size': size,
                 'seeders': seeders,
                 'leechers': leechers,
-                'pubdate': None,
+                'pubdate': pubdate,
             }
             log.debug(
                 'Found result: {title} with {x} seeders'
@@ -180,7 +183,12 @@ class BTNProvider(TorrentProvider):
             if title:
                 title = title.replace(' ', '.')
 
-        url = parsed_json.get('DownloadURL').replace('\\/', '/')
+        url = parsed_json.get('DownloadURL')
+        if not url:
+            log.debug('Download URL is missing from response for release "{0}"', title)
+        else:
+            url = url.replace('\\/', '/')
+
         return title, url
 
     def _search_params(self, ep_obj, mode, season_numbering=None):
@@ -215,10 +223,7 @@ class BTNProvider(TorrentProvider):
             params['tvdb'] = self._get_tvdb_id()
             searches.append(params)
         else:
-            name_exceptions = scene_exceptions.get_scene_exceptions(
-                ep_obj.series.indexerid,
-                ep_obj.series.indexer
-            )
+            name_exceptions = scene_exceptions.get_scene_exceptions(ep_obj.series)
             name_exceptions.add(ep_obj.series.name)
             for name in name_exceptions:
                 # Search by name if we don't have tvdb id
@@ -247,18 +252,20 @@ class BTNProvider(TorrentProvider):
             )
             time.sleep(cpu_presets[app.CPU_PRESET])
         except jsonrpclib.jsonrpc.ProtocolError as error:
-            if error.message[1] == 'Invalid API Key':
+            message = error.args[0]
+            if message == (-32001, 'Invalid API Key'):
                 log.warning('Incorrect authentication credentials.')
-            elif error.message[1] == 'Call Limit Exceeded':
-                log.warning('You have exceeded the limit of'
-                            ' 150 calls per hour.')
+            elif message == (-32002, 'Call Limit Exceeded'):
+                log.warning('You have exceeded the limit of 150 calls per hour.')
+            elif isinstance(message, tuple) and message[1] in (500, 524, ):
+                log.warning('Provider is currently unavailable. Error: {code} {text}',
+                            {'code': message[1], 'text': message[2]})
             else:
-                log.error('JSON-RPC protocol error while accessing provider.'
-                          ' Error: {msg!r}', {'msg': error.message[1]})
+                log.error('JSON-RPC protocol error while accessing provider. Error: {msg!r}',
+                          {'msg': message})
 
-        except (socket.error, socket.timeout, ValueError) as error:
-            log.warning('Error while accessing provider.'
-                        ' Error: {msg}', {'msg': error})
+        except (socket.error, ValueError) as error:
+            log.warning('Error while accessing provider. Error: {msg!r}', {'msg': error})
         return parsed_json
 
 

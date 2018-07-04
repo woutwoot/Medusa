@@ -4,10 +4,8 @@
 
 from __future__ import unicode_literals
 
-import datetime
 import logging
 import re
-import traceback
 
 from medusa import tv
 from medusa.bs4_parser import BS4Parser
@@ -15,11 +13,10 @@ from medusa.helper.common import (
     convert_size,
     try_int,
 )
-from medusa.indexers.indexer_config import mappings
+from medusa.indexers.utils import mappings
 from medusa.logger.adapters.style import BraceAdapter
 from medusa.providers.torrent.torrent_provider import TorrentProvider
 
-from pytimeparse import parse
 from requests.compat import urljoin
 from requests.utils import dict_from_cookiejar
 
@@ -67,6 +64,7 @@ class SDBitsProvider(TorrentProvider):
         :returns: A list of search results (structure)
         """
         results = []
+
         if not self.login():
             return results
 
@@ -87,7 +85,7 @@ class SDBitsProvider(TorrentProvider):
             for search_string in search_strings[mode]:
 
                 if mode != 'RSS':
-                    imdb_id = self.show.externals.get(mappings[10])
+                    imdb_id = self.series.externals.get(mappings[10])
                     if imdb_id:
                         search_params['imdb'] = imdb_id
                         log.debug('Search string (IMDb ID): {imdb_id}',
@@ -152,14 +150,8 @@ class SDBitsProvider(TorrentProvider):
                     torrent_size = cells[5].get_text(' ')
                     size = convert_size(torrent_size) or -1
 
-                    pubdate = None
-                    pubdate_raw = cells[4].get_text('_').split('_')
-                    if pubdate_raw:
-                        if len(pubdate_raw) == 2:
-                            pubdate_raw = parse(pubdate_raw[0]) + parse(pubdate_raw[1])
-                        else:
-                            pubdate_raw = parse(pubdate_raw[0])
-                        pubdate = '{0}'.format(datetime.datetime.now() - datetime.timedelta(seconds=pubdate_raw))
+                    pubdate_raw = cells[4].get_text(' ')
+                    pubdate = self.parse_pubdate(pubdate_raw, human_time=True)
 
                     item = {
                         'title': title,
@@ -175,8 +167,7 @@ class SDBitsProvider(TorrentProvider):
 
                     items.append(item)
                 except (AttributeError, TypeError, KeyError, ValueError, IndexError):
-                    log.error('Failed parsing provider. Traceback: {0!r}',
-                              traceback.format_exc())
+                    log.exception('Failed parsing provider.')
 
         return items
 

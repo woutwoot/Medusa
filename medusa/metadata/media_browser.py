@@ -1,5 +1,7 @@
 # coding=utf-8
 
+from __future__ import unicode_literals
+
 import datetime
 import logging
 import os
@@ -12,7 +14,7 @@ from medusa.indexers.indexer_exceptions import IndexerEpisodeNotFound, IndexerSe
 from medusa.logger.adapters.style import BraceAdapter
 from medusa.metadata import generic
 
-from six import iteritems, string_types
+from six import iteritems, string_types, text_type as str
 
 try:
     import xml.etree.cElementTree as etree
@@ -279,7 +281,7 @@ class MediaBrowserMetadata(generic.GenericMetadata):
 
         if getattr(my_show, u'rating', None):
             rating = etree.SubElement(tv_node, u'Rating')
-            rating.text = my_show[u'rating']
+            rating.text = str(my_show[u'rating'])
 
         if getattr(my_show, u'firstaired', None):
             try:
@@ -292,10 +294,10 @@ class MediaBrowserMetadata(generic.GenericMetadata):
 
         if getattr(my_show, u'runtime', None):
             running_time = etree.SubElement(tv_node, u'RunningTime')
-            running_time.text = my_show[u'runtime']
+            running_time.text = str(my_show[u'runtime'])
 
             runtime = etree.SubElement(tv_node, u'Runtime')
-            runtime.text = my_show[u'runtime']
+            runtime.text = str(my_show[u'runtime'])
 
         if getattr(my_show, u'imdb_id', None):
             imdb_id = etree.SubElement(tv_node, u'IMDB_ID')
@@ -430,7 +432,7 @@ class MediaBrowserMetadata(generic.GenericMetadata):
                 if not ep_obj.related_episodes:
                     if getattr(my_ep, u'rating', None):
                         rating = etree.SubElement(episode, u'Rating')
-                        rating.text = my_ep[u'rating']
+                        rating.text = str(my_ep[u'rating'])
 
                     if getattr(my_show, u'imdb_id', None):
                         IMDB_ID = etree.SubElement(episode, u'IMDB_ID')

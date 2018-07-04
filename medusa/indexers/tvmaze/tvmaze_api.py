@@ -17,12 +17,15 @@ from medusa.logger.adapters.style import BraceAdapter
 from pytvmaze import TVMaze
 from pytvmaze.exceptions import BaseError, CastNotFound, IDNotFound, ShowIndexError, ShowNotFound, UpdateNotFound
 
+from six import integer_types, itervalues, string_types, text_type, viewitems
+
 log = BraceAdapter(logging.getLogger(__name__))
 log.logger.addHandler(logging.NullHandler())
 
 
 class TVmaze(BaseIndexer):
-    """Create easy-to-use interface to name of season/episode name
+    """Create easy-to-use interface to name of season/episode name.
+
     >>> indexer_api = tvmaze()
     >>> indexer_api['Scrubs'][1][24]['episodename']
     u'My Last Day'
@@ -30,8 +33,6 @@ class TVmaze(BaseIndexer):
 
     def __init__(self, *args, **kwargs):  # pylint: disable=too-many-locals,too-many-arguments
         super(TVmaze, self).__init__(*args, **kwargs)
-
-        self.indexer = 3
 
         # List of language from http://thetvmaze.com/api/0629B785CE550C8D/languages.xml
         # Hard-coded here as it is realtively static, and saves another HTTP request, as
@@ -71,7 +72,6 @@ class TVmaze(BaseIndexer):
             'screencap': 'filename',
             'episode_number': 'episodenumber',
             'season_number': 'seasonnumber',
-            'rating': 'contentrating',
         }
 
     def _map_results(self, tvmaze_response, key_mappings=None, list_separator='|'):
@@ -98,7 +98,7 @@ class TVmaze(BaseIndexer):
         for item in tvmaze_response:
             return_dict = {}
             try:
-                for key, value in item.__dict__.iteritems():
+                for key, value in viewitems(item.__dict__):
                     if value is None or value == []:
                         continue
 
@@ -121,24 +121,24 @@ class TVmaze(BaseIndexer):
                             return_dict['tvdb_id'] = value.get('thetvdb')
                             return_dict['imdb_id'] = value.get('imdb')
                         if key == 'rating':
-                            return_dict['contentrating'] = str(value.get('average'))\
-                                if isinstance(value, dict) else str(value)
+                            return_dict['rating'] = value.get('average') \
+                                if isinstance(value, dict) else value
                     else:
                         # Do some value sanitizing
                         if isinstance(value, list):
-                            if all(isinstance(x, (str, unicode, int)) for x in value):
-                                value = list_separator.join(str(v) for v in value)
+                            if all(isinstance(x, (string_types, integer_types)) for x in value):
+                                value = list_separator.join(text_type(v) for v in value)
 
                         # Try to map the key
                         if key in key_mappings:
                             key = key_mappings[key]
 
                         # Set value to key
-                        return_dict[key] = str(value) if isinstance(value, (float, int)) else value
+                        return_dict[key] = text_type(value) if isinstance(value, (float, integer_types)) else value
 
                 # For episodes
                 if hasattr(item, 'season_number') and getattr(item, 'episode_number') is None:
-                    return_dict['episodenumber'] = str(index_special_episodes)
+                    return_dict['episodenumber'] = text_type(index_special_episodes)
                     return_dict['seasonnumber'] = 0
                     index_special_episodes += 1
 
@@ -156,7 +156,8 @@ class TVmaze(BaseIndexer):
 
     def _show_search(self, show, request_language='en'):
         """
-        Uses the TVMaze API to search for a show
+        Use the TVMaze API to search for a show.
+
         :param show: The show name that's searched for as a string
         :param request_language: Language in two letter code. TVMaze fallsback to en itself.
         :return: A list of Show objects.
@@ -164,8 +165,9 @@ class TVmaze(BaseIndexer):
         try:
             results = self.tvmaze_api.get_show_list(show)
         except ShowNotFound as error:
+            # Use error.value because TVMaze API exceptions may be utf-8 encoded when using __str__
             raise IndexerShowNotFound(
-                'Show search failed in getting a result with reason: {0}'.format(error)
+                'Show search failed in getting a result with reason: {0}'.format(error.value)
             )
         except BaseError as error:
             raise IndexerException('Show search failed in getting a result with error: {0!r}'.format(error))
@@ -177,12 +179,11 @@ class TVmaze(BaseIndexer):
 
     # Tvdb implementation
     def search(self, series):
-        """This searches tvmaze.com for the series name
+        """Search tvmaze.com for the series name.
 
         :param series: the query for the series name
         :return: An ordered dict with the show searched for. In the format of OrderedDict{"series": [list of shows]}
         """
-        series = series.encode('utf-8')
         log.debug('Searching for show {0}', series)
 
         results = self._show_search(series, request_language=self.config['language'])
@@ -215,7 +216,7 @@ class TVmaze(BaseIndexer):
 
     def _get_episodes(self, tvmaze_id, specials=False, aired_season=None):  # pylint: disable=unused-argument
         """
-        Get all the episodes for a show by tvmaze id
+        Get all the episodes for a show by tvmaze id.
 
         :param tvmaze_id: Series tvmaze id.
         :return: An ordered dict with the show searched for. In the format of OrderedDict{"episode": [list of episodes]}
@@ -262,7 +263,7 @@ class TVmaze(BaseIndexer):
             seas_no = int(seasnum)
             ep_no = int(epno)
 
-            for k, v in cur_ep.items():
+            for k, v in viewitems(cur_ep):
                 k = k.lower()
 
                 if v is not None:
@@ -324,7 +325,7 @@ class TVmaze(BaseIndexer):
 
         _images = {'season': {'original': {}}}
         # Get the season posters
-        for season in seasons.keys():
+        for season in seasons:
             if not getattr(seasons[season], 'image', None):
                 continue
             if season not in _images['season']['original']:
@@ -379,12 +380,12 @@ class TVmaze(BaseIndexer):
             cur_actors.append(save_actor)
         self._set_show_data(tvmaze_id, '_actors', cur_actors)
 
-    def _get_show_data(self, tvmaze_id, language='en'):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals
-        """Takes a series ID, gets the epInfo URL and parses the tvmaze json response
+    def _get_show_data(self, tvmaze_id, language='en'):
+        """Take a series ID, gets the epInfo URL and parses the tvmaze json response.
+
         into the shows dict in layout:
         shows[series_id][season_number][episode_number]
         """
-
         if self.config['language'] is None:
             log.debug('Config language is none, using show language')
             if language is None:
@@ -392,10 +393,9 @@ class TVmaze(BaseIndexer):
             get_show_in_language = language
         else:
             log.debug(
-                'Configured language {0} override show language of {1}', (
-                    self.config['language'],
-                    language
-                )
+                'Configured language {0} override show language of {1}',
+                self.config['language'],
+                language
             )
             get_show_in_language = self.config['language']
 
@@ -410,14 +410,14 @@ class TVmaze(BaseIndexer):
             raise IndexerError('Series result returned zero')
 
         # save all retrieved show information to Show object.
-        for k, v in series_info['series'].items():
+        for k, v in viewitems(series_info['series']):
             if v is not None:
                 self._set_show_data(tvmaze_id, k, v)
 
         # Get external ids.
         # As the external id's are not part of the shows default response, we need to make an additional call for it.
         # Im checking for the external value. to make sure only externals with a value get in.
-        self._set_show_data(tvmaze_id, 'externals', {external_id: str(getattr(self.shows[tvmaze_id], external_id, None))
+        self._set_show_data(tvmaze_id, 'externals', {external_id: text_type(getattr(self.shows[tvmaze_id], external_id, None))
                                                      for external_id in ['tvdb_id', 'imdb_id', 'tvrage_id']
                                                      if getattr(self.shows[tvmaze_id], external_id, None)})
 
@@ -447,7 +447,7 @@ class TVmaze(BaseIndexer):
             return results
 
         if getattr(updates, 'updates', None):
-            for show_id, update_ts in updates.updates.items():
+            for show_id, update_ts in viewitems(updates.updates):
                 if start_date < update_ts.seconds_since_epoch < (end_date or int(time())):
                     results.append(int(show_id))
 
@@ -455,7 +455,7 @@ class TVmaze(BaseIndexer):
 
     # Public methods, usable separate from the default api's interface api['show_id']
     def get_last_updated_series(self, from_time, weeks=1, filter_show_list=None):
-        """Retrieve a list with updated shows
+        """Retrieve a list with updated shows.
 
         :param from_time: epoch timestamp, with the start date/time
         :param weeks: number of weeks to get updates for.
@@ -483,14 +483,14 @@ class TVmaze(BaseIndexer):
         :returns: A dict with externals, including the tvmaze id.
         """
         mapping = {'thetvdb': 'tvdb_id', 'tvrage': 'tvrage_id', 'imdb': 'imdb_id'}
-        for external_id in mapping.values():
+        for external_id in itervalues(mapping):
             if kwargs.get(external_id):
                 try:
                     result = self.tvmaze_api.get_show(**{external_id: kwargs.get(external_id)})
                     if result:
                         externals = {mapping[tvmaze_external_id]: external_value
                                      for tvmaze_external_id, external_value
-                                     in result.externals.items()
+                                     in viewitems(result.externals)
                                      if external_value and mapping.get(tvmaze_external_id)}
                         externals['tvmaze_id'] = result.maze_id
                         return externals

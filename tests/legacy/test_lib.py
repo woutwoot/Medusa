@@ -74,7 +74,7 @@ app.SYS_ENCODING = 'UTF-8'
 
 app.showList = []
 app.QUALITY_DEFAULT = 4  # hdtv
-app.FLATTEN_FOLDERS_DEFAULT = 0
+app.SEASON_FOLDERS_DEFAULT = 1
 
 app.NAMING_PATTERN = ''
 app.NAMING_ABD_PATTERN = ''
@@ -86,7 +86,7 @@ app.PROVIDER_ORDER = ["app_index"]
 app.newznabProviderList = NewznabProvider.get_providers_list(
     'Application Index|http://lolo.medusa.com/|0|5030,5040|0|eponly|0|0|0|0!!!'
     'NZBs.org|https://nzbs.org/||5030,5040,5060,5070,5090|0|eponly|0|0|0|0!!!'
-    'Usenet-Crawler|https://www.usenet-crawler.com/||5030,5040,5060|0|eponly|0|0|0|0'
+    'Usenet-Crawler|https://api.usenet-crawler.com/||5030,5040,5060|0|eponly|0|0|0|0'
 )
 app.providerList = providers.make_provider_list()
 

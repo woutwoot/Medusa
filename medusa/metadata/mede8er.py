@@ -15,7 +15,7 @@ from medusa.indexers.indexer_exceptions import IndexerEpisodeNotFound, IndexerSe
 from medusa.logger.adapters.style import BraceAdapter
 from medusa.metadata import media_browser
 
-from six import string_types
+from six import string_types, text_type as str
 
 try:
     import xml.etree.cElementTree as etree
@@ -153,11 +153,11 @@ class Mede8erMetadata(media_browser.MediaBrowserMetadata):
 
         if getattr(my_show, 'id', None):
             indexer_id = etree.SubElement(tv_node, 'indexerid')
-            indexer_id.text = my_show['id']
+            indexer_id.text = str(my_show['id'])
 
         if getattr(my_show, 'runtime', None):
             runtime = etree.SubElement(tv_node, 'runtime')
-            runtime.text = my_show['runtime']
+            runtime.text = str(my_show['runtime'])
 
         if getattr(my_show, '_actors', None):
             cast = etree.SubElement(tv_node, 'cast')
@@ -379,6 +379,10 @@ class Mede8erMetadata(media_browser.MediaBrowserMetadata):
 
         nfo_file_path = self.get_episode_file_path(ep_obj)
         nfo_file_dir = os.path.dirname(nfo_file_path)
+
+        if not (nfo_file_path and nfo_file_dir):
+            log.debug(u'Unable to write episode nfo file because episode location is missing.')
+            return False
 
         try:
             if not os.path.isdir(nfo_file_dir):

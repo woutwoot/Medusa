@@ -10,6 +10,8 @@ import re
 from medusa.common import Quality
 from medusa.logger.adapters.style import BraceAdapter
 
+from six import viewitems
+
 from subliminal.video import Episode
 
 log = BraceAdapter(logging.getLogger(__name__))
@@ -67,7 +69,7 @@ def refine(video, tv_episode=None, **kwargs):
     log.debug('Refining using Episode information.')
     enrich(EPISODE_MAPPING, video, tv_episode)
     enrich(ADDITIONAL_MAPPING, video, tv_episode, overwrite=False)
-    guess = Quality.to_guessit(tv_episode.status)
+    guess = Quality.to_guessit(tv_episode.quality)
     enrich({'resolution': guess.get('screen_size'), 'format': guess.get('format')}, video, overwrite=False)
 
 
@@ -81,7 +83,7 @@ def enrich(attributes, target, source=None, overwrite=True):
     :param overwrite: if source field should be overwritten if not already set
     :type overwrite: bool
     """
-    for key, value in attributes.items():
+    for key, value in viewitems(attributes):
         old_value = getattr(target, key)
         if old_value and old_value != '' and not overwrite:
             continue

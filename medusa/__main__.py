@@ -59,6 +59,8 @@ import subprocess
 import sys
 import threading
 import time
+from builtins import object
+from builtins import str
 
 from configobj import ConfigObj
 
@@ -78,12 +80,14 @@ from medusa.indexers.indexer_config import INDEXER_TVDBV2, INDEXER_TVMAZE
 from medusa.providers.generic_provider import GenericProvider
 from medusa.providers.nzb.newznab import NewznabProvider
 from medusa.providers.torrent.rss.rsstorrent import TorrentRssProvider
+from medusa.providers.torrent.torznab.torznab import TorznabProvider
 from medusa.search.backlog import BacklogSearchScheduler, BacklogSearcher
 from medusa.search.daily import DailySearcher
 from medusa.search.proper import ProperFinder
 from medusa.search.queue import ForcedSearchQueue, SearchQueue, SnatchQueue
 from medusa.server.core import AppWebServer
 from medusa.system.shutdown import Shutdown
+from medusa.themes import read_themes
 from medusa.tv import Series
 
 from six import text_type
@@ -133,6 +137,41 @@ class Application(object):
         help_msg = help_msg.replace('Medusa directory', app.PROG_DIR)
 
         return help_msg
+
+    @staticmethod
+    def migrate_images():
+        """Migrate pre-multi-indexer images to their correct place."""
+        if hasattr(app, 'MIGRATE_IMAGES'):
+            for series_obj in app.showList:
+                try:
+                    images_root_indexer = os.path.join(app.CACHE_DIR, 'images', series_obj.indexer_name)
+                    images_root_indexer_thumbnails = os.path.join(images_root_indexer, 'thumbnails')
+
+                    # Create the cache/images/tvdb folder if not exists
+                    if not os.path.isdir(images_root_indexer):
+                        os.makedirs(images_root_indexer)
+
+                    if not os.path.isdir(images_root_indexer_thumbnails):
+                        os.makedirs(images_root_indexer_thumbnails)
+
+                    # Check for the different possible images and move them.
+                    for image_type in ('poster', 'fanart', 'banner'):
+                        image_name = '{series_id}.{image_type}.jpg'.format(series_id=series_obj.series_id, image_type=image_type)
+                        src = os.path.join(app.CACHE_DIR, 'images', image_name)
+                        dst = os.path.join(images_root_indexer, image_name)
+                        if os.path.isfile(src) and not os.path.isfile(dst):
+                            # image found, let's try to move it
+                            os.rename(src, dst)
+
+                        src_thumb = os.path.join(app.CACHE_DIR, 'images', 'thumbnails', image_name)
+                        dst_thumb = os.path.join(images_root_indexer_thumbnails, image_name)
+                        if os.path.isfile(src_thumb) and not os.path.isfile(dst_thumb):
+                            # image found, let's try to move it
+                            os.rename(src_thumb, dst_thumb)
+                except Exception as error:
+                    logger.warning('Error while trying to move the images for series {series}. '
+                                   'Try to refresh the show, or move the images manually if you know '
+                                   'what you are doing. Error: {error}', series=series_obj.name, error=error)
 
     def start(self, args):
         """Start Application."""
@@ -287,6 +326,10 @@ class Application(object):
             if self.console_logging:
                 sys.stdout.write('Restore: restoring DB and config.ini %s!\n' % ('FAILED', 'SUCCESSFUL')[success])
 
+        # Initialize all available themes
+        app.AVAILABLE_THEMES = read_themes()
+        app.DATA_ROOT = os.path.join(app.PROG_DIR, 'themes')
+
         # Load the config and publish it to the application package
         if self.console_logging and not os.path.isfile(app.CONFIG_FILE):
             sys.stdout.write('Unable to find %s, all settings will be default!\n' % app.CONFIG_FILE)
@@ -308,6 +351,7 @@ class Application(object):
         logger.info('Starting Medusa [{branch}] using {config!r}', branch=app.BRANCH, config=app.CONFIG_FILE)
 
         self.clear_cache()
+        self.migrate_images()
 
         if self.forced_port:
             logger.info('Forcing web server to port {port}', port=self.forced_port)
@@ -331,7 +375,7 @@ class Application(object):
         self.web_options = {
             'port': int(self.start_port),
             'host': self.web_host,
-            'data_root': os.path.join(app.PROG_DIR, 'static'),
+            'data_root': app.DATA_ROOT,
             'vue_root': os.path.join(app.PROG_DIR, 'vue'),
             'web_root': app.WEB_ROOT,
             'log_dir': self.log_dir,
@@ -379,7 +423,7 @@ class Application(object):
 
             sections = [
                 'General', 'Blackhole', 'Newzbin', 'SABnzbd', 'NZBget', 'KODI', 'PLEX', 'Emby', 'Growl', 'Prowl', 'Twitter',
-                'Boxcar2', 'NMJ', 'NMJv2', 'Synology', 'Slack', 'SynologyNotifier', 'pyTivo', 'NMA', 'Pushalot', 'Pushbullet',
+                'Boxcar2', 'NMJ', 'NMJv2', 'Synology', 'Slack', 'SynologyNotifier', 'pyTivo', 'Pushalot', 'Pushbullet',
                 'Subtitles', 'pyTivo',
             ]
 
@@ -395,7 +439,7 @@ class Application(object):
             app.GIT_AUTH_TYPE = check_setting_int(app.CFG, 'General', 'git_auth_type', 0)
             app.GIT_USERNAME = check_setting_str(app.CFG, 'General', 'git_username', '')
             app.GIT_PASSWORD = check_setting_str(app.CFG, 'General', 'git_password', '', censor_log='low')
-            app.GIT_TOKEN = check_setting_str(app.CFG, 'General', 'git_token', '', censor_log='low')
+            app.GIT_TOKEN = check_setting_str(app.CFG, 'General', 'git_token', '', censor_log='low', encrypted=True)
             app.DEVELOPER = bool(check_setting_int(app.CFG, 'General', 'developer', 0))
 
             # debugging
@@ -430,14 +474,16 @@ class Application(object):
             app.GIT_REMOTE = check_setting_str(app.CFG, 'General', 'git_remote', 'origin')
             app.GIT_REMOTE_URL = check_setting_str(app.CFG, 'General', 'git_remote_url', app.APPLICATION_URL)
 
-            repo_url_re = re.compile(r'(?P<prefix>(?:git@github\.com:)|(?:https://github\.com/))(?P<org>\w+)/(?P<repo>\w+)\.git')
-            m = repo_url_re.match(app.GIT_REMOTE_URL)
-            if m:
-                groups = m.groupdict()
-                if groups['org'].lower() != app.GIT_ORG.lower() or groups['repo'].lower() != app.GIT_REPO.lower():
-                    app.GIT_REMOTE_URL = groups['prefix'] + app.GIT_ORG + '/' + app.GIT_REPO + '.git'
-            else:
-                app.GIT_REMOTE_URL = app.APPLICATION_URL
+            if not app.DEVELOPER:
+                repo_url_re = re.compile(
+                    r'(?P<prefix>(?:git@github\.com:)|(?:https://github\.com/))(?P<org>\w+)/(?P<repo>\w+)\.git')
+                m = repo_url_re.match(app.GIT_REMOTE_URL)
+                if m:
+                    groups = m.groupdict()
+                    if groups['org'].lower() != app.GIT_ORG.lower() or groups['repo'].lower() != app.GIT_REPO.lower():
+                        app.GIT_REMOTE_URL = groups['prefix'] + app.GIT_ORG + '/' + app.GIT_REPO + '.git'
+                else:
+                    app.GIT_REMOTE_URL = app.APPLICATION_URL
 
             # current commit hash
             app.CUR_COMMIT_HASH = check_setting_str(app.CFG, 'General', 'cur_commit_hash', '')
@@ -460,14 +506,11 @@ class Application(object):
                 logger.error(u'Creating local cache dir failed, using system default')
                 app.CACHE_DIR = None
 
-            # Check if we need to perform a restore of the cache folder
-            Application.restore_cache_folder(app.CACHE_DIR)
-            cache.configure(app.CACHE_DIR)
-
             app.FANART_BACKGROUND = bool(check_setting_int(app.CFG, 'GUI', 'fanart_background', 1))
             app.FANART_BACKGROUND_OPACITY = check_setting_float(app.CFG, 'GUI', 'fanart_background_opacity', 0.4)
 
-            app.THEME_NAME = check_setting_str(app.CFG, 'GUI', 'theme_name', 'dark')
+            app.THEME_NAME = check_setting_str(app.CFG, 'GUI', 'theme_name', 'dark',
+                                               valid_values=[t.name for t in app.AVAILABLE_THEMES])
 
             app.SOCKET_TIMEOUT = check_setting_int(app.CFG, 'General', 'socket_timeout', 30)
             socket.setdefaulttimeout(app.SOCKET_TIMEOUT)
@@ -494,7 +537,9 @@ class Application(object):
             app.SUBLIMINAL_LOG = bool(check_setting_int(app.CFG, 'General', 'subliminal_log', 0))
             app.PRIVACY_LEVEL = check_setting_str(app.CFG, 'General', 'privacy_level', 'normal')
             app.SSL_VERIFY = bool(check_setting_int(app.CFG, 'General', 'ssl_verify', 1))
+            app.SSL_CA_BUNDLE = check_setting_str(app.CFG, 'General', 'ssl_ca_bundle', '')
             app.INDEXER_DEFAULT_LANGUAGE = check_setting_str(app.CFG, 'General', 'indexerDefaultLang', 'en')
+            app.TVDB_DVD_ORDER_EP_IGNORE = bool(check_setting_int(app.CFG, 'General', 'tvdb_dvd_order_ep_ignore', 0))
             app.EP_DEFAULT_DELETED_STATUS = check_setting_int(app.CFG, 'General', 'ep_default_deleted_status', 6)
             app.LAUNCH_BROWSER = bool(check_setting_int(app.CFG, 'General', 'launch_browser', 1))
             app.DOWNLOAD_URL = check_setting_str(app.CFG, 'General', 'download_url', '')
@@ -524,7 +569,8 @@ class Application(object):
             app.VERSION_NOTIFY = bool(check_setting_int(app.CFG, 'General', 'version_notify', 1))
             app.AUTO_UPDATE = bool(check_setting_int(app.CFG, 'General', 'auto_update', 0))
             app.NOTIFY_ON_UPDATE = bool(check_setting_int(app.CFG, 'General', 'notify_on_update', 1))
-            app.FLATTEN_FOLDERS_DEFAULT = bool(check_setting_int(app.CFG, 'General', 'flatten_folders_default', 0))
+            # TODO: Remove negation, change item name to season_folders_default and default to 1
+            app.SEASON_FOLDERS_DEFAULT = not bool(check_setting_int(app.CFG, 'General', 'flatten_folders_default', 0))
             app.INDEXER_DEFAULT = check_setting_int(app.CFG, 'General', 'indexer_default', 0)
             app.INDEXER_TIMEOUT = check_setting_int(app.CFG, 'General', 'indexer_timeout', 20)
             app.ANIME_DEFAULT = bool(check_setting_int(app.CFG, 'General', 'anime_default', 0))
@@ -797,13 +843,6 @@ class Application(object):
             app.PYTIVO_SHARE_NAME = check_setting_str(app.CFG, 'pyTivo', 'pytivo_share_name', '')
             app.PYTIVO_TIVO_NAME = check_setting_str(app.CFG, 'pyTivo', 'pytivo_tivo_name', '')
 
-            app.USE_NMA = bool(check_setting_int(app.CFG, 'NMA', 'use_nma', 0))
-            app.NMA_NOTIFY_ONSNATCH = bool(check_setting_int(app.CFG, 'NMA', 'nma_notify_onsnatch', 0))
-            app.NMA_NOTIFY_ONDOWNLOAD = bool(check_setting_int(app.CFG, 'NMA', 'nma_notify_ondownload', 0))
-            app.NMA_NOTIFY_ONSUBTITLEDOWNLOAD = bool(check_setting_int(app.CFG, 'NMA', 'nma_notify_onsubtitledownload', 0))
-            app.NMA_API = check_setting_list(app.CFG, 'NMA', 'nma_api', '', censor_log='low')
-            app.NMA_PRIORITY = check_setting_str(app.CFG, 'NMA', 'nma_priority', '0')
-
             app.USE_PUSHALOT = bool(check_setting_int(app.CFG, 'Pushalot', 'use_pushalot', 0))
             app.PUSHALOT_NOTIFY_ONSNATCH = bool(check_setting_int(app.CFG, 'Pushalot', 'pushalot_notify_onsnatch', 0))
             app.PUSHALOT_NOTIFY_ONDOWNLOAD = bool(check_setting_int(app.CFG, 'Pushalot', 'pushalot_notify_ondownload', 0))
@@ -941,18 +980,18 @@ class Application(object):
                 try:
                     import getpass
                     app.OS_USER = getpass.getuser()
-                except StandardError:
+                except Exception:
                     pass
 
             try:
                 app.LOCALE = locale.getdefaultlocale()
-            except StandardError:
+            except Exception:
                 app.LOCALE = None, None
 
             try:
                 import ssl
                 app.OPENSSL_VERSION = ssl.OPENSSL_VERSION
-            except StandardError:
+            except Exception:
                 pass
 
             if app.VERSION_NOTIFY:
@@ -970,6 +1009,9 @@ class Application(object):
 
             app.TORRENTRSS_PROVIDERS = check_setting_list(app.CFG, 'TorrentRss', 'torrentrss_providers')
             app.torrentRssProviderList = TorrentRssProvider.get_providers_list(app.TORRENTRSS_PROVIDERS)
+
+            app.TORZNAB_PROVIDERS = check_setting_list(app.CFG, 'Torznab', 'torznab_providers')
+            app.torznab_providers_list = TorznabProvider.get_providers_list(app.TORZNAB_PROVIDERS)
 
             all_providers = providers.sorted_provider_list()
 
@@ -1012,8 +1054,13 @@ class Application(object):
                         load_provider_setting(app.CFG, provider, 'string', 'cookies', '', censor_log='low')
 
                 if isinstance(provider, TorrentRssProvider):
-                    load_provider_setting(app.CFG, provider, 'string', 'cookies', '', censor_log='low')
                     load_provider_setting(app.CFG, provider, 'string', 'url', '', censor_log='low')
+                    load_provider_setting(app.CFG, provider, 'string', 'title_tag', '')
+
+                if isinstance(provider, TorznabProvider):
+                    load_provider_setting(app.CFG, provider, 'string', 'url', '', censor_log='low')
+                    load_provider_setting(app.CFG, provider, 'list', 'cat_ids', '', split_value=',')
+                    load_provider_setting(app.CFG, provider, 'list', 'cap_tv_search', '', split_value=',')
 
                 if isinstance(provider, NewznabProvider):
                     # non configurable
@@ -1021,7 +1068,7 @@ class Application(object):
                         load_provider_setting(app.CFG, provider, 'string', 'url', '', censor_log='low')
                         load_provider_setting(app.CFG, provider, 'bool', 'needs_auth', 1)
                     # configurable
-                    load_provider_setting(app.CFG, provider, 'list', 'cat_ids', '', censor_log='low', split_value=',')
+                    load_provider_setting(app.CFG, provider, 'list', 'cat_ids', '', split_value=',')
 
             if not os.path.isfile(app.CONFIG_FILE):
                 logger.debug(u'Unable to find {config!r}, all settings will be default!', config=app.CONFIG_FILE)
@@ -1037,7 +1084,11 @@ class Application(object):
                 except OSError as e:
                     logger.warning(u'Unable to remove subtitles cache files. Error: {error}', error=e)
                 # Disable flag to erase cache
-                app.SUBTITLES_ERASE_CACHE = 0
+                app.SUBTITLES_ERASE_CACHE = False
+
+            # Check if we need to perform a restore of the cache folder
+            Application.restore_cache_folder(app.CACHE_DIR)
+            cache.configure(app.CACHE_DIR)
 
             # Rebuild the censored list
             app_logger.rebuild_censored_list()
@@ -1283,7 +1334,7 @@ class Application(object):
                 app.trakt_checker_scheduler.silent = True
             app.trakt_checker_scheduler.start()
 
-            if app.USE_TORRENTS and app.REMOVE_FROM_CLIENT:
+            if app.USE_TORRENTS and app.REMOVE_FROM_CLIENT and app.TORRENT_METHOD != 'blackhole':
                 app.torrent_checker_scheduler.enable = True
             app.torrent_checker_scheduler.silent = False
             app.torrent_checker_scheduler.start()
@@ -1388,6 +1439,7 @@ class Application(object):
         new_config['General']['subliminal_log'] = int(app.SUBLIMINAL_LOG)
         new_config['General']['privacy_level'] = app.PRIVACY_LEVEL
         new_config['General']['ssl_verify'] = int(app.SSL_VERIFY)
+        new_config['General']['ssl_ca_bundle'] = app.SSL_CA_BUNDLE
         new_config['General']['download_url'] = app.DOWNLOAD_URL
         new_config['General']['localhost_ip'] = app.LOCALHOST_IP
         new_config['General']['cpu_preset'] = app.CPU_PRESET
@@ -1427,9 +1479,11 @@ class Application(object):
         new_config['General']['quality_default'] = int(app.QUALITY_DEFAULT)
         new_config['General']['status_default'] = int(app.STATUS_DEFAULT)
         new_config['General']['status_default_after'] = int(app.STATUS_DEFAULT_AFTER)
-        new_config['General']['flatten_folders_default'] = int(app.FLATTEN_FOLDERS_DEFAULT)
+        # TODO: Rename to season_folders_default
+        new_config['General']['flatten_folders_default'] = int(not app.SEASON_FOLDERS_DEFAULT)
         new_config['General']['indexer_default'] = int(app.INDEXER_DEFAULT)
         new_config['General']['indexer_timeout'] = int(app.INDEXER_TIMEOUT)
+        new_config['General']['tvdb_dvd_order_ep_ignore'] = int(app.TVDB_DVD_ORDER_EP_IGNORE)
         new_config['General']['anime_default'] = int(app.ANIME_DEFAULT)
         new_config['General']['scene_default'] = int(app.SCENE_DEFAULT)
         new_config['General']['provider_order'] = app.PROVIDER_ORDER
@@ -1526,21 +1580,19 @@ class Application(object):
 
             attributes = {
                 'all': [
-                    'name', 'url', 'api_key', 'username',
-                    'search_mode', 'search_fallback',
-                    'enable_daily', 'enable_backlog', 'enable_manualsearch',
-                    'enable_search_delay', 'search_delay',
+                    'name', 'url', 'cat_ids', 'api_key', 'username', 'search_mode', 'search_fallback',
+                    'enable_daily', 'enable_backlog', 'enable_manualsearch', 'enable_search_delay',
+                    'search_delay',
                 ],
                 'encrypted': [
                     'password',
                 ],
                 GenericProvider.TORRENT: [
-                    'custom_url', 'digest', 'hash', 'passkey', 'pin', 'confirmed', 'ranked', 'engrelease', 'onlyspasearch',
-                    'sorting', 'ratio', 'minseed', 'minleech', 'options', 'freeleech', 'cat', 'subtitle', 'cookies',
+                    'custom_url', 'digest', 'hash', 'passkey', 'pin', 'confirmed', 'ranked', 'engrelease',
+                    'onlyspasearch', 'sorting', 'ratio', 'minseed', 'minleech', 'options', 'freeleech',
+                    'cat', 'subtitle', 'cookies', 'title_tag', 'cap_tv_search',
                 ],
-                GenericProvider.NZB: [
-                    'cat_ids'
-                ],
+                GenericProvider.NZB: [],
             }
 
             for attr in attributes['all']:
@@ -1764,14 +1816,6 @@ class Application(object):
         new_config['pyTivo']['pytivo_share_name'] = app.PYTIVO_SHARE_NAME
         new_config['pyTivo']['pytivo_tivo_name'] = app.PYTIVO_TIVO_NAME
 
-        new_config['NMA'] = {}
-        new_config['NMA']['use_nma'] = int(app.USE_NMA)
-        new_config['NMA']['nma_notify_onsnatch'] = int(app.NMA_NOTIFY_ONSNATCH)
-        new_config['NMA']['nma_notify_ondownload'] = int(app.NMA_NOTIFY_ONDOWNLOAD)
-        new_config['NMA']['nma_notify_onsubtitledownload'] = int(app.NMA_NOTIFY_ONSUBTITLEDOWNLOAD)
-        new_config['NMA']['nma_api'] = app.NMA_API
-        new_config['NMA']['nma_priority'] = app.NMA_PRIORITY
-
         new_config['Pushalot'] = {}
         new_config['Pushalot']['use_pushalot'] = int(app.USE_PUSHALOT)
         new_config['Pushalot']['pushalot_notify_onsnatch'] = int(app.PUSHALOT_NOTIFY_ONSNATCH)
@@ -1806,6 +1850,9 @@ class Application(object):
 
         new_config['TorrentRss'] = {}
         new_config['TorrentRss']['torrentrss_providers'] = app.TORRENTRSS_PROVIDERS
+
+        new_config['Torznab'] = {}
+        new_config['Torznab']['torznab_providers'] = app.TORZNAB_PROVIDERS
 
         new_config['GUI'] = {}
         new_config['GUI']['theme_name'] = app.THEME_NAME
@@ -1993,7 +2040,7 @@ class Application(object):
         try:
             logger.info('Shutting down Tornado')
             self.web_server.shutDown()
-            self.web_server.join(10)
+            self.web_server.join(5)
         except Exception as error:
             exception_handler.handle(error)
 

@@ -2,12 +2,14 @@
 # -*- coding: utf-8 -*-
 
 """Properties: This section contains additional properties to be guessed by guessit."""
+from __future__ import unicode_literals
 
 import re
 
 from guessit.reutils import build_or_pattern
 from guessit.rules.common import dash
 from guessit.rules.common.validators import seps_surround
+
 from rebulk.processors import POST_PROCESS
 from rebulk.rebulk import Rebulk
 from rebulk.rules import RemoveMatch, Rule
@@ -104,7 +106,7 @@ def container():
                     other.name == 'container' and 'extension' not in other.tags
                     else '__default__')
 
-    nzb = ['nzb']
+    nzb = [b'nzb']
 
     rebulk.regex(r'\.' + build_or_pattern(nzb) + '$', exts=nzb, tags=['extension', 'torrent'])
 

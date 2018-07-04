@@ -8,11 +8,9 @@ import traceback
 
 import certifi
 
-import factory
-
 import medusa.common
 from medusa import app
-from medusa.session import hooks
+from medusa.session import factory, handlers, hooks
 
 import requests
 
@@ -57,9 +55,16 @@ class MedusaSession(BaseSession):
         Configure the ssl verification.
 
         We need to overwrite this in the request method. As it's not available in the session init.
+
         :param verify: SSL verification on or off.
         """
-        return certifi.old_where() if all([app.SSL_VERIFY, verify]) else False
+        if all([app.SSL_VERIFY, verify]):
+            if app.SSL_CA_BUNDLE:
+                return app.SSL_CA_BUNDLE
+            else:
+                return certifi.where()
+
+        return False
 
     def __init__(self, proxies=None, **kwargs):
         """Create base Medusa session instance."""
@@ -68,6 +73,9 @@ class MedusaSession(BaseSession):
 
         # Pop the cache_control config
         cache_control = kwargs.pop('cache_control', None)
+
+        # Apply handler for bypassing CloudFlare protection
+        self.cloudflare = kwargs.pop('cloudflare', False)
 
         # Initialize request.session after we've done the pop's.
         super(MedusaSession, self).__init__(**kwargs)
@@ -89,9 +97,13 @@ class MedusaSession(BaseSession):
         self.headers.update(self.default_headers)
 
     def request(self, method, url, data=None, params=None, headers=None, timeout=30, verify=True, **kwargs):
-        return super(MedusaSession, self).request(method, url, data=data, params=params, headers=headers,
-                                                  timeout=timeout, verify=self._get_ssl_cert(verify),
-                                                  **kwargs)
+        ssl_cert = self._get_ssl_cert(verify)
+        response = super(MedusaSession, self).request(method, url, data=data, params=params, headers=headers,
+                                                      timeout=timeout, verify=ssl_cert, **kwargs)
+        if self.cloudflare:
+            response = handlers.cloudflare(self, response, timeout=timeout, verify=ssl_cert, **kwargs)
+
+        return response
 
     def get_json(self, url, method='GET', *args, **kwargs):
         """Overwrite request, to be able to return the json value if possible. Else it will fail silently."""
@@ -142,19 +154,19 @@ class MedusaSafeSession(MedusaSession):
                                                           timeout=timeout, verify=verify, **kwargs)
             resp.raise_for_status()
         except requests.exceptions.HTTPError as error:
-            log.debug(u'The response returned a non-200 response while requestion url {url}. Error: {err_msg!r}',
+            log.debug(u'The response returned a non-200 response while requesting url {url} Error: {err_msg!r}',
                       url=url, err_msg=error)
             return resp or error.response
         except requests.exceptions.RequestException as error:
-            log.debug(u'Error requesting url {url}. Error: {err_msg}', url=url, err_msg=error)
+            log.debug(u'Error requesting url {url} Error: {err_msg}', url=url, err_msg=error)
             return resp or error.response
         except Exception as error:
             if u'ECONNRESET' in error or (hasattr(error, u'errno') and error.errno == errno.ECONNRESET):
                 log.warning(
-                    u'Connection reset by peer accessing url {url}. Error: {err_msg}'.format(url=url, err_msg=error)
+                    u'Connection reset by peer accessing url {url} Error: {err_msg}'.format(url=url, err_msg=error)
                 )
             else:
-                log.info(u'Unknown exception in url {url}. Error: {err_msg}', url=url, err_msg=error)
+                log.info(u'Unknown exception in url {url} Error: {err_msg}', url=url, err_msg=error)
                 log.debug(traceback.format_exc())
             return None
 

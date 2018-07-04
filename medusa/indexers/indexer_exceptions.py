@@ -1,6 +1,7 @@
 # coding=utf-8
 
 """Custom exceptions used or raised by indexer_api."""
+from __future__ import unicode_literals
 
 
 class IndexerException(Exception):
@@ -52,7 +53,7 @@ class IndexerUnavailable(IndexerError):
     """Indexer API is unavailable, for example when giving back a 5xx response."""
 
 
-class IndexerShowAllreadyInLibrary(IndexerException):
+class IndexerShowAlreadyInLibrary(IndexerException):
     """The show is already in the library. Same show for multiple indexers, is not supported."""
 
 

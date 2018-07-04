@@ -14,6 +14,8 @@ from medusa.indexers.indexer_exceptions import IndexerEpisodeNotFound, IndexerSe
 from medusa.logger.adapters.style import BraceAdapter
 from medusa.metadata import generic
 
+from six import text_type as str
+
 try:
     import xml.etree.cElementTree as etree
 except ImportError:
@@ -237,7 +239,7 @@ class WDTVMetadata(generic.GenericMetadata):
 
             if ep_to_write.season != 0 and getattr(my_show, 'runtime', None):
                 runtime = etree.SubElement(episode, 'runtime')
-                runtime.text = my_show['runtime']
+                runtime.text = str(my_show['runtime'])
 
             if getattr(my_show, 'genre', None):
                 genre = etree.SubElement(episode, 'genre')

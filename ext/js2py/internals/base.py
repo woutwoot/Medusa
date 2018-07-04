@@ -84,7 +84,7 @@ class PyJs(object):
                               'enumerable': True}
 
     def can_put(self, prop):  # to check
-        assert type(prop) == unicode
+        assert type(prop) == unicode, type(prop)
         # takes py returns py
         desc = self.get_own_property(prop)
         if desc:  # if we have this property
@@ -98,7 +98,7 @@ class PyJs(object):
         if inherited is None:
             return self.extensible
         if is_accessor_descriptor(inherited):
-            return not inherited['set'].is_undefined()
+            return not is_undefined(inherited['set'])
         elif self.extensible:
             return inherited['writable']  # weird...
         return False
@@ -226,7 +226,7 @@ def get_member(self, prop, space): # general member getter, prop has to be uncon
     if typ not in PRIMITIVES:  # most likely getter for object
         return self.get_member(prop)  # <- object can implement this to support faster prop getting. ex array.
     elif typ == unicode:  # then probably a String
-        if type(prop)==float:
+        if type(prop)==float and is_finite(prop):
             index = int(prop)
             if index==prop and 0 <= index < len(self):
                 return self[index]
@@ -457,7 +457,7 @@ class PyJsRegExp(PyJs):
                         reg = reg.replace(fix, rep)
                        # print 'Fix', fix, '->', rep, '=', reg
                 else:
-                    raise
+                    raise Exception()
                 REGEXP_DB[body, flags] = self.pat
             except:
                 #print 'Invalid pattern...', self.value, comp
@@ -467,7 +467,7 @@ class PyJsRegExp(PyJs):
                     'global' : {'value': self.glob, 'enumerable': False, 'writable': False, 'configurable': False},
                     'ignoreCase' : {'value': bool(self.ignore_case), 'enumerable': False, 'writable': False, 'configurable': False},
                     'multiline' : {'value': bool(self.multiline), 'enumerable': False, 'writable': False, 'configurable': False},
-                    'lastIndex' : {'value': 0, 'enumerable': False, 'writable': True, 'configurable': False}}
+                    'lastIndex' : {'value': 0., 'enumerable': False, 'writable': True, 'configurable': False}}
 
     def match(self, string, pos):
         '''string is of course a py string'''
@@ -594,6 +594,8 @@ class Scope(PyJs):
             if self.is_with_scope:
                 if self.own.has_property(var):
                     return self.own.put(var, val, throw=throw)
+                else:
+                    return self.prototype.put(var, val)
             # trying to put in local scope
             # we dont know yet in which scope we should place this var
             elif var in self.own:

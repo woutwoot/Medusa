@@ -1,5 +1,7 @@
 # coding=utf-8
 """First module to initialize."""
+from __future__ import unicode_literals
+
 import random
 from threading import Lock
 
@@ -90,6 +92,7 @@ showList = []
 providerList = []
 newznabProviderList = []
 torrentRssProviderList = []
+torznab_providers_list = []
 metadata_provider_dict = {}
 
 NEWEST_VERSION = None
@@ -151,6 +154,7 @@ HANDLE_REVERSE_PROXY = False
 PROXY_SETTING = None
 PROXY_INDEXERS = True
 SSL_VERIFY = True
+SSL_CA_BUNDLE = None
 
 LOCALHOST_IP = None
 
@@ -172,6 +176,7 @@ LAUNCH_BROWSER = False
 CACHE_DIR = None
 ACTUAL_CACHE_DIR = None
 ROOT_DIRS = []
+TVDB_DVD_ORDER_EP_IGNORE = False
 
 TRASH_REMOVE_SHOW = False
 TRASH_ROTATE_LOGS = False
@@ -195,7 +200,7 @@ METADATA_MEDE8ER = []
 QUALITY_DEFAULT = None
 STATUS_DEFAULT = None
 STATUS_DEFAULT_AFTER = None
-FLATTEN_FOLDERS_DEFAULT = False
+SEASON_FOLDERS_DEFAULT = True
 SUBTITLES_DEFAULT = False
 INDEXER_DEFAULT = None
 INDEXER_TIMEOUT = None
@@ -471,13 +476,6 @@ PYTIVO_HOST = ''
 PYTIVO_SHARE_NAME = ''
 PYTIVO_TIVO_NAME = ''
 
-USE_NMA = False
-NMA_NOTIFY_ONSNATCH = False
-NMA_NOTIFY_ONDOWNLOAD = False
-NMA_NOTIFY_ONSUBTITLEDOWNLOAD = False
-NMA_API = []
-NMA_PRIORITY = 0
-
 USE_PUSHALOT = False
 PUSHALOT_NOTIFY_ONSNATCH = False
 PUSHALOT_NOTIFY_ONDOWNLOAD = False
@@ -518,10 +516,17 @@ DATE_PRESET = None
 TIME_PRESET = None
 TIME_PRESET_W_SECONDS = None
 TIMEZONE_DISPLAY = None
+
+# UI
 THEME_NAME = None
+AVAILABLE_THEMES = []
+DATA_ROOT = None
+THEME = 'dark'
+THEME_PATH = None
+THEME_DATA_ROOT = None
 POSTER_SORTBY = None
 POSTER_SORTDIR = None
-FANART_BACKGROUND = None
+FANART_BACKGROUND = True
 FANART_BACKGROUND_OPACITY = None
 SELECTED_ROOT = None
 BACKLOG_PERIOD = None
@@ -608,6 +613,8 @@ __INITIALIZED__ = False
 NEWZNAB_PROVIDERS = []
 
 TORRENTRSS_PROVIDERS = []
+
+TORZNAB_PROVIDERS = []
 
 RECENTLY_DELETED = set()
 

@@ -33,8 +33,7 @@ class ConfigGeneral(Config):
     def index(self):
         t = PageTemplate(rh=self, filename='config_general.mako')
 
-        return t.render(title='Config - General', header='General Configuration',
-                        topmenu='config', submenu=self.ConfigMenu(),
+        return t.render(topmenu='config', submenu=self.ConfigMenu(),
                         controller='config', action='index')
 
     @staticmethod
@@ -42,23 +41,20 @@ class ConfigGeneral(Config):
         return helpers.generate_api_key()
 
     @staticmethod
-    def saveRootDirs(rootDirString=None):
-        app.ROOT_DIRS = rootDirString.split('|')
-
-    @staticmethod
-    def saveAddShowDefaults(defaultStatus, allowed_qualities, preferred_qualities, defaultFlattenFolders, subtitles=False,
-                            anime=False, scene=False, defaultStatusAfter=WANTED):
+    def saveAddShowDefaults(default_status, allowed_qualities, preferred_qualities, default_season_folders,
+                            subtitles=False, anime=False, scene=False, default_status_after=WANTED):
 
         allowed_qualities = [_.strip() for _ in allowed_qualities.split(',')] if allowed_qualities else []
         preferred_qualities = [_.strip() for _ in preferred_qualities.split(',')] if preferred_qualities else []
 
-        new_quality = Quality.combine_qualities([int(quality) for quality in allowed_qualities], [int(quality) for quality in preferred_qualities])
+        new_quality = Quality.combine_qualities([int(quality) for quality in allowed_qualities],
+                                                [int(quality) for quality in preferred_qualities])
 
-        app.STATUS_DEFAULT = int(defaultStatus)
-        app.STATUS_DEFAULT_AFTER = int(defaultStatusAfter)
+        app.STATUS_DEFAULT = int(default_status)
+        app.STATUS_DEFAULT_AFTER = int(default_status_after)
         app.QUALITY_DEFAULT = int(new_quality)
 
-        app.FLATTEN_FOLDERS_DEFAULT = config.checkbox_to_value(defaultFlattenFolders)
+        app.SEASON_FOLDERS_DEFAULT = config.checkbox_to_value(default_season_folders)
         app.SUBTITLES_DEFAULT = config.checkbox_to_value(subtitles)
 
         app.ANIME_DEFAULT = config.checkbox_to_value(anime)
@@ -78,7 +74,7 @@ class ConfigGeneral(Config):
                     indexer_timeout=None, download_url=None, rootDir=None, theme_name=None, default_page=None,
                     git_reset=None, git_reset_branches=None, git_auth_type=0, git_username=None, git_password=None, git_token=None,
                     display_all_seasons=None, subliminal_log=None, privacy_level='normal', fanart_background=None, fanart_background_opacity=None,
-                    dbdebug=None, fallback_plex_enable=1, fallback_plex_notifications=1, fallback_plex_timeout=3, web_root=None):
+                    dbdebug=None, fallback_plex_enable=1, fallback_plex_notifications=1, fallback_plex_timeout=3, web_root=None, ssl_ca_bundle=None):
 
         results = []
 
@@ -120,6 +116,7 @@ class ConfigGeneral(Config):
         app.NO_RESTART = config.checkbox_to_value(no_restart)
 
         app.SSL_VERIFY = config.checkbox_to_value(ssl_verify)
+        app.SSL_CA_BUNDLE = ssl_ca_bundle
         # app.LOG_DIR is set in config.change_LOG_DIR()
         app.COMING_EPS_MISSED_RANGE = int(coming_eps_missed_range)
         app.DISPLAY_ALL_SEASONS = config.checkbox_to_value(display_all_seasons)
@@ -196,7 +193,8 @@ class ConfigGeneral(Config):
 
         app.HANDLE_REVERSE_PROXY = config.checkbox_to_value(handle_reverse_proxy)
 
-        app.THEME_NAME = theme_name
+        config.change_theme(theme_name)
+
         app.LAYOUT_WIDE = config.checkbox_to_value(layout_wide)
         app.FANART_BACKGROUND = config.checkbox_to_value(fanart_background)
         app.FANART_BACKGROUND_OPACITY = fanart_background_opacity

@@ -415,10 +415,10 @@ class STORE_MEMBER_OP(OP_CODE):
                 raise MakeError('TypeError', "Cannot set property '%s' of null" % to_string(name))
             elif typ is UNDEFINED_TYPE:
                 raise MakeError('TypeError', "Cannot set property '%s' of undefined" % to_string(name))
-            ctx.stack.append(BINARY_OPERATIONS[self.op](value, get_member(left, name, ctx.space)))
+            ctx.stack.append(BINARY_OPERATIONS[self.op](get_member(left, name, ctx.space), value))
             return
         else:
-            ctx.stack.append(BINARY_OPERATIONS[self.op](value, get_member(left, name, ctx.space)))
+            ctx.stack.append(BINARY_OPERATIONS[self.op](get_member(left, name, ctx.space), value))
             left.put_member(name, ctx.stack[-1])
 
 
@@ -438,10 +438,10 @@ class STORE_MEMBER_DOT_OP(OP_CODE):
                 raise MakeError('TypeError', "Cannot set property '%s' of null" % self.prop)
             elif typ == UNDEFINED_TYPE:
                 raise MakeError('TypeError', "Cannot set property '%s' of undefined" % self.prop)
-            ctx.stack.append(BINARY_OPERATIONS[self.op](value, get_member_dot(left, self.prop, ctx.space)))
+            ctx.stack.append(BINARY_OPERATIONS[self.op](get_member_dot(left, self.prop, ctx.space), value))
             return
         else:
-            ctx.stack.append(BINARY_OPERATIONS[self.op](value, get_member_dot(left, self.prop, ctx.space)))
+            ctx.stack.append(BINARY_OPERATIONS[self.op](get_member_dot(left, self.prop, ctx.space), value))
             left.put(self.prop, ctx.stack[-1])
 
 
@@ -646,11 +646,9 @@ class WITH(OP_CODE):
         with_context.THIS_BINDING = ctx.THIS_BINDING
         status = ctx.space.exe.execute_fragment_under_context(with_context, self.beg_label, self.end_label)
 
-
-
         val, typ, spec = status
-        if typ!=3:
-            print typ
+
+        if typ != 3:  # exception
             ctx.stack.pop()
 
         if typ == 0:  # normal
@@ -662,11 +660,64 @@ class WITH(OP_CODE):
         elif typ == 2:  # jump outside
             ctx.stack.append(val)
             return spec
-        elif typ == 3:
+        elif typ == 3:  # exception
             # throw is made with empty stack as usual
             raise spec
         else:
             raise RuntimeError('Invalid return code')
+
+
+class FOR_IN(OP_CODE):
+    _params = ['name', 'body_start_label', 'continue_label', 'break_label']
+    def __init__(self, name, body_start_label, continue_label, break_label):
+        self.name = name
+        self.body_start_label = body_start_label
+        self.continue_label = continue_label
+        self.break_label = break_label
+
+    def eval(self, ctx):
+        iterable = ctx.stack.pop()
+        if is_null(iterable) or is_undefined(iterable):
+            ctx.stack.pop()
+            ctx.stack.append(undefined)
+            return self.break_label
+
+        obj = to_object(iterable, ctx.space)
+
+        for e in sorted(obj.own):
+            if not obj.own[e]['enumerable']:
+                continue
+
+            ctx.put(self.name, e) # JS would have been so much nicer if this was ctx.space.put(self.name, obj.get(e))
+
+            # evaluate the body
+            status = ctx.space.exe.execute_fragment_under_context(ctx, self.body_start_label, self.break_label)
+
+            val, typ, spec = status
+
+            if typ != 3:  # exception
+                ctx.stack.pop()
+
+            if typ == 0:  # normal
+                ctx.stack.append(val)
+                continue
+            elif typ == 1:  # return
+                ctx.stack.append(spec)
+                return None, None  # send return signal
+            elif typ == 2:  # jump outside
+                # now have to figure out whether this is a continue or something else...
+                ctx.stack.append(val)
+                if spec == self.continue_label:
+                    # just a continue, perform next iteration as normal
+                    continue
+                return spec # break or smth, go there and finish the iteration
+            elif typ == 3:  # exception
+                # throw is made with empty stack as usual
+                raise spec
+            else:
+                raise RuntimeError('Invalid return code')
+
+        return self.break_label
 
 
 # all opcodes...

@@ -16,8 +16,12 @@
 # You should have received a copy of the GNU General Public License
 # along with Medusa. If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import unicode_literals
+
 import datetime
 import os
+from builtins import object
+from builtins import str
 
 from medusa import app, common, logger, tv
 from medusa.common import DOWNLOADED, Quality
@@ -55,6 +59,11 @@ class TVShow(object):  # pylint: disable=too-few-public-methods
         self.sports = 0
         self.anime = 0
         self.scene = 0
+
+    @property
+    def series_id(self):
+        """To make a clear distinction between an indexer and the id for the series. You can now also use series_id."""
+        return self.indexerid
 
     def _is_anime(self):
         """
@@ -94,7 +103,8 @@ class TVEpisode(tv.Episode):  # pylint: disable=too-many-instance-attributes
         self.scene_episode = episode
         self.scene_absolute_number = absolute_number
         self.airdate = datetime.date(2010, 3, 9)
-        self.status = Quality.composite_status(common.DOWNLOADED, common.Quality.SDTV)
+        self.status = common.DOWNLOADED
+        self.quality = common.Quality.SDTV
         self.release_name = 'Show.Name.S02E03.HDTV.x264-RLSGROUP'
         self.is_proper = True
         self.series = TVShow()
@@ -200,26 +210,27 @@ def validate_name(pattern, multi=None, anime_type=None,  # pylint: disable=too-m
     logger.log(u"Trying to parse " + new_name, logger.DEBUG)
 
     try:
-        result = NameParser(show=ep.series, naming_pattern=True).parse(new_name)
+        parse_result = NameParser(series=ep.series, naming_pattern=True).parse(new_name)
     except (InvalidNameException, InvalidShowException) as error:
         logger.log(u"{}".format(error), logger.DEBUG)
         return False
 
-    logger.log(u"The name " + new_name + " parsed into " + str(result), logger.DEBUG)
+    logger.log(u"The name " + new_name + " parsed into " + str(parse_result), logger.DEBUG)
 
     if abd or sports:
-        if result.air_date != ep.airdate:
+        if parse_result.air_date != ep.airdate:
             logger.log(u"Air date incorrect in parsed episode, pattern isn't valid", logger.DEBUG)
             return False
     elif anime_type != 3:
-        if len(result.ab_episode_numbers) and result.ab_episode_numbers != [x.absolute_number for x in [ep] + ep.related_episodes]:
+        if parse_result.ab_episode_numbers and parse_result.ab_episode_numbers != [x.absolute_number
+                                                                                   for x in [ep] + ep.related_episodes]:
             logger.log(u"Absolute numbering incorrect in parsed episode, pattern isn't valid", logger.DEBUG)
             return False
     else:
-        if result.season_number != ep.season:
+        if parse_result.season_number != ep.season:
             logger.log(u"Season number incorrect in parsed episode, pattern isn't valid", logger.DEBUG)
             return False
-        if result.episode_numbers != [x.episode for x in [ep] + ep.related_episodes]:
+        if parse_result.episode_numbers != [x.episode for x in [ep] + ep.related_episodes]:
             logger.log(u"Episode numbering incorrect in parsed episode, pattern isn't valid", logger.DEBUG)
             return False
 
@@ -231,7 +242,8 @@ def generate_sample_ep(multi=None, abd=False, sports=False, anime_type=None):
     ep = TVEpisode(2, 3, 3, "Ep Name")
 
     # pylint: disable=protected-access
-    ep.status = Quality.composite_status(DOWNLOADED, Quality.HDTV)
+    ep.status = DOWNLOADED
+    ep.quality = Quality.HDTV
     ep.airdate = datetime.date(2011, 3, 9)
 
     if abd:
@@ -256,7 +268,8 @@ def generate_sample_ep(multi=None, abd=False, sports=False, anime_type=None):
             ep.release_name = 'Show.Name.003-004.HDTV.x264-RLSGROUP'
 
             secondEp = TVEpisode(2, 4, 4, "Ep Name (2)")
-            secondEp.status = Quality.composite_status(DOWNLOADED, Quality.HDTV)
+            secondEp.status = DOWNLOADED
+            secondEp.quality = Quality.HDTV
             secondEp.release_name = ep.release_name
 
             ep.related_episodes.append(secondEp)
@@ -264,11 +277,13 @@ def generate_sample_ep(multi=None, abd=False, sports=False, anime_type=None):
             ep.release_name = 'Show.Name.S02E03E04E05.HDTV.x264-RLSGROUP'
 
             secondEp = TVEpisode(2, 4, 4, "Ep Name (2)")
-            secondEp.status = Quality.composite_status(DOWNLOADED, Quality.HDTV)
+            secondEp.status = DOWNLOADED
+            secondEp.quality = Quality.HDTV
             secondEp.release_name = ep.release_name
 
             thirdEp = TVEpisode(2, 5, 5, "Ep Name (3)")
-            thirdEp.status = Quality.composite_status(DOWNLOADED, Quality.HDTV)
+            thirdEp.status = DOWNLOADED
+            thirdEp.quality = Quality.HDTV
             thirdEp.release_name = ep.release_name
 
             ep.related_episodes.append(secondEp)

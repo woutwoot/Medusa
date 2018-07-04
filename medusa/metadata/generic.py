@@ -1,15 +1,19 @@
 # coding=utf-8
 
+from __future__ import unicode_literals
+
+import errno
 import io
 import logging
 import os
 import re
+from builtins import object
+from builtins import str
 
 from medusa import app, exception_handler, helpers
 from medusa.helper.common import replace_extension
 from medusa.helper.exceptions import ex
 from medusa.helper.metadata import get_image
-from medusa.indexers.indexer_api import indexerApi
 from medusa.indexers.indexer_config import INDEXER_TMDB, INDEXER_TVDBV2, INDEXER_TVMAZE
 from medusa.indexers.indexer_exceptions import (IndexerEpisodeNotFound, IndexerException,
                                                 IndexerSeasonNotFound, IndexerShowNotFound)
@@ -284,11 +288,17 @@ class GenericMetadata(object):
                     u'Received an invalid XML for {series}, try again later. Error: {error}',
                     {u'series': show_obj.name, u'error': error}
                 )
-            except IOError as e:
-                log.error(
-                    u'Unable to write file to {location} - are you sure the folder is writeable? {error}',
-                    {u'location': nfo_file_path, u'error': ex(e)}
-                )
+            except IOError as error:
+                if error.errno == errno.EACCES:
+                    log.warning(
+                        u'Unable to write metadata file to {location} - verify that the path is writeable',
+                        {u'location': nfo_file_path}
+                    )
+                else:
+                    log.error(
+                        u'Unable to write metadata file to {location}. Error: {error!r}',
+                        {u'location': nfo_file_path, u'error': error}
+                    )
 
     def create_fanart(self, show_obj):
         if self.fanart and show_obj and not self._has_fanart(show_obj):
@@ -323,6 +333,8 @@ class GenericMetadata(object):
                 u'Metadata provider {name} creating episode thumbnail for {episode}',
                 {u'name': self.name, u'episode': ep_obj.pretty_name()}
             )
+            if self.indexer_api:
+                ep_obj.set_indexer_data(season=ep_obj.season, indexer_api=self.indexer_api)
             return self.save_thumbnail(ep_obj)
         return False
 
@@ -456,6 +468,10 @@ class GenericMetadata(object):
 
         nfo_file_path = self.get_episode_file_path(ep_obj)
         nfo_file_dir = os.path.dirname(nfo_file_path)
+
+        if not (nfo_file_path and nfo_file_dir):
+            log.debug(u'Unable to write episode nfo file because episode location is missing.')
+            return False
 
         try:
             if not os.path.isdir(nfo_file_dir):
@@ -727,11 +743,13 @@ class GenericMetadata(object):
         image_url = None
 
         indexer_show_obj = self._get_show_data(show_obj)
+        if not indexer_show_obj:
+            return None
 
         if image_type not in (u'fanart', u'poster', u'banner', u'thumbnail', u'poster_thumb', u'banner_thumb'):
             log.error(
                 u'Invalid {image}, unable to find it in the {indexer}',
-                {u'image': image_type, u'indexer': indexerApi(show_obj.indexer).name}
+                {u'image': image_type, u'indexer': show_obj.indexer_name}
             )
             return None
 
@@ -788,7 +806,7 @@ class GenericMetadata(object):
         # to present to user via ui to pick down the road.
 
         # find the correct season in the TVDB object and just copy the dict into our result dict
-        for season_art_id in season_art_obj[u'original'][season].keys():
+        for season_art_id in season_art_obj[u'original'][season]:
             if season not in result:
                 result[season] = {}
             result[season][season_art_id] = season_art_obj[u'original'][season][season_art_id][u'_bannerpath']
@@ -824,43 +842,43 @@ class GenericMetadata(object):
         # to present to user via ui to pick down the road.
 
         # find the correct season in the TVDB object and just copy the dict into our result dict
-        for season_art_id in season_art_obj[u'original'][season].keys():
+        for season_art_id in season_art_obj[u'original'][season]:
             if season not in result:
                 result[season] = {}
             result[season][season_art_id] = season_art_obj[u'original'][season][season_art_id][u'_bannerpath']
 
         return result
 
-    def _get_show_data(self, show_obj):
+    def _get_show_data(self, series_obj):
         """
         Retrieve show data from the indexer.
 
         Try to reuse the indexer_api class instance attribute.
         As we are reusing the indexers results, we need to do a full index including actors and images.
 
-        :param show_obj: A TVshow object.
+        :param series_obj: A TVshow object.
         :return: A re-indexed show object.
         """
-        show_id = show_obj.indexerid
+        series_id = series_obj.series_id
 
         try:
-            if not (show_obj.indexer_api and all([show_obj.indexer_api.config[u'banners_enabled'],
-                                                  show_obj.indexer_api.config[u'actors_enabled']])):
-                show_obj.create_indexer(banners=True, actors=True)
+            if not (series_obj.indexer_api and all([series_obj.indexer_api.config[u'banners_enabled'],
+                                                    series_obj.indexer_api.config[u'actors_enabled']])):
+                series_obj.create_indexer(banners=True, actors=True)
 
-            self.indexer_api = show_obj.indexer_api
-            my_show = self.indexer_api[int(show_id)]
+            self.indexer_api = series_obj.indexer_api
+            my_show = self.indexer_api[int(series_id)]
         except IndexerShowNotFound:
             log.warning(
                 u'Unable to find {indexer} show {id}, skipping it',
-                {u'indexer': indexerApi(show_obj.indexer).name, u'id': show_id}
+                {u'indexer': series_obj.indexer_name, u'id': series_id}
             )
             return False
 
         except (IndexerException, RequestException):
             log.warning(
                 u'{indexer} is down, cannot use its data to add this show',
-                {u'indexer': indexerApi(show_obj.indexer).name}
+                {u'indexer': series_obj.indexer_name}
             )
             return False
 
@@ -868,7 +886,7 @@ class GenericMetadata(object):
         if not (getattr(my_show, u'seriesname', None) and getattr(my_show, u'id', None)):
             log.warning(
                 u'Incomplete info for {indexer} show {id}, skipping it',
-                {u'indexer': indexerApi(show_obj.indexer).name, u'id': show_id}
+                {u'indexer': series_obj.indexer_name, u'id': series_id}
             )
             return False
 
@@ -885,13 +903,13 @@ class GenericMetadata(object):
 
         if not os.path.isdir(folder) or not os.path.isfile(metadata_path):
             log.debug(
-                u'Cannot load the metadata file from {location}, it does not exist',
-                {u'location': metadata_path}
+                u'Cannot load the {name} metadata file from {location}, it does not exist',
+                {u'name': self.name, u'location': metadata_path}
             )
             return empty_return
 
-        log.debug(u'Loading show info from metadata file in {location}',
-                  {u'location': folder})
+        log.debug(u'Loading show info from {name} metadata file in {location}',
+                  {u'name': self.name, u'location': folder})
 
         try:
             with io.open(metadata_path, u'rb') as xmlFileObj:
