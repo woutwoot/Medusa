@@ -49,9 +49,15 @@ class TorrentProvider(GenericProvider):
 
         return '&tr=' + '&tr='.join(x.strip() for x in app.TRACKERS_LIST if x.strip())
 
-    def search_result(self, episodes):
+    def search_result(self, item, episodes):
         """Return a provider result object."""
-        return TorrentSearchResult(episodes, provider=self)
+        name, url = self._get_title_and_url(item)
+        size = self._get_size(item)
+        pubdate = self._get_pubdate(item)
+        seeders, leechers = self._get_result_info(item)
+
+        return TorrentSearchResult(episodes, provider=self, name=name, url=url, size=size,
+                                   pubdate=pubdate, seeders=seeders, leechers=leechers)
 
     def _get_size(self, item):
         """Get result size."""

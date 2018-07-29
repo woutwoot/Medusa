@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 
 import logging
 
+from datetime import datetime
 from medusa.common import Quality
 from medusa.logger.adapters.style import BraceAdapter
 
@@ -15,33 +16,31 @@ log.logger.addHandler(logging.NullHandler())
 class SearchResult(object):
     """Represents a search result."""
 
-    def __init__(self, episodes=None, provider=None):
+    def __init__(self, episodes, provider=None, name=None, url=None,
+                 quality=None, size=None, release_group=None,
+                 version=None, proper_tags=None):
         # list of Episode objects that this result is associated with
         self.episodes = episodes
+        # release series object
+        self.series = episodes[0].series
         # the search provider
         self.provider = provider
-        # release series object
-        self._series = None
-        # URL to the NZB/torrent file
-        self.url = ''
-        # quality of the release
-        self._quality = Quality.UNKNOWN
         # release name
-        self.name = ''
+        self.name = name or ''
+        # URL to the NZB/torrent file
+        self.url = url or ''
+        # quality of the release
+        self.quality = int(quality) or Quality.UNKNOWN
         # size of the release (-1 = n/a)
-        self._size = -1
+        self.size = int(size) or -1
         # release group
-        self.release_group = ''
+        self.release_group = release_group or ''
         # version
-        self._version = -1
+        self.version = int(version) or -1
         # proper_tags
-        self._proper_tags = []
-        # seeders of the release
-        self._seeders = -1
-        # leechers of the release
-        self._leechers = -1
+        self.proper_tags = proper_tags or []
         # update date
-        self.date = None
+        self.date = datetime.today()
         # release publish date
         self.pubdate = None
         # hash
@@ -77,14 +76,6 @@ class SearchResult(object):
         self._actual_episode = None
         # Search type. For example MANUAL_SEARCH, FORCED_SEARCH, DAILY_SEARCH, PROPER_SEARCH
         self.search_type = None
-
-    @property
-    def series(self):
-        return self._series or self.episodes[0].series
-
-    @series.setter
-    def series(self, value):
-        self._series = value
 
     @property
     def quality(self):
@@ -231,19 +222,3 @@ class TorrentSearchResult(SearchResult):
     def __init__(self, episodes, provider=None):
         super(TorrentSearchResult, self).__init__(episodes, provider=provider)
         self.result_type = u'torrent'
-
-    @property
-    def seeders(self):
-        return self._seeders
-
-    @seeders.setter
-    def seeders(self, value):
-        self._seeders = int(value)
-
-    @property
-    def leechers(self):
-        return self._leechers
-
-    @leechers.setter
-    def leechers(self, value):
-        self._leechers = int(value)

@@ -203,20 +203,9 @@ class GenericProvider(object):
                     search_strings = self._get_episode_search_strings(episode_obj, add_string=term)
 
                     for item in self.search(search_strings[0], ep_obj=episode_obj):
-                        search_result = SearchResult(episodes=[episode_obj])
-                        results.append(search_result)
-
-                        search_result.name, search_result.url = self._get_title_and_url(item)
-                        search_result.seeders, search_result.leechers = self._get_result_info(item)
-                        search_result.size = self._get_size(item)
-                        search_result.pubdate = self._get_pubdate(item)
-
-                        # This will be retrieved from the parser
-                        search_result.proper_tags = ''
-
+                        search_result = self.search_result(item, [episode_obj])
                         search_result.search_type = PROPER_SEARCH
-                        search_result.date = datetime.today()
-                        search_result.series = series_obj
+                        results.append(search_result)
 
         return results
 
@@ -308,19 +297,12 @@ class GenericProvider(object):
 
             # Make sure we start with a TorrentSearchResult, NZBDataSearchResult
             # or NZBSearchResult search result obj.
-            search_result = SearchResult()
+            search_result = self.search_result(item, episodes)
             search_results.append(search_result)
-            search_result.item = item
+
             search_result.download_current_quality = download_current_quality
             # FIXME: Should be changed to search_result.search_type
             search_result.forced_search = forced_search
-
-            (search_result.name, search_result.url) = self._get_title_and_url(item)
-            (search_result.seeders, search_result.leechers) = self._get_result_info(item)
-
-            search_result.size = self._get_size(item)
-            search_result.pubdate = self._get_pubdate(item)
-
             search_result.result_wanted = True
 
             try:
@@ -495,9 +477,15 @@ class GenericProvider(object):
 
         return quality
 
-    def search_result(self, episodes=None):
-        """Get result."""
-        return SearchResult(episodes)
+    def build_search_result(self, item, episodes):
+        """Build the search result from a provider result."""
+        name, url = self._get_title_and_url(item)
+        size = self._get_size(item)
+        seeders, leechers = self._get_result_info(item)
+        pubdate = self._get_pubdate(item)
+
+        return SearchResult(episodes, provider=self, name=name, url=url,
+                            size=size, pubdate=pubdate)
 
     def image_name(self):
         """Return provider image name."""
