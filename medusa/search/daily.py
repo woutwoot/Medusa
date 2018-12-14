@@ -120,4 +120,6 @@ class DailySearcher(object):  # pylint:disable=too-few-public-methods
             DailySearchQueueItem(scheduler_start_time, force=force)
         )
 
+        log.warning('DailySearchQueue is alive?: {alive}', {'alive': app.search_queue_scheduler.is_alive()})
+
         self.amActive = False
