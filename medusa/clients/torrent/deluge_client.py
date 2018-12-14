@@ -19,7 +19,7 @@ from medusa.helpers import (
 )
 from medusa.logger.adapters.style import BraceAdapter
 
-from six.moves.urllib.parse import urljoin
+from requests.compat import urljoin
 from requests.exceptions import RequestException
 
 from six import viewitems
