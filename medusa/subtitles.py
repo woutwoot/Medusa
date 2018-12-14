@@ -721,7 +721,7 @@ def get_video(tv_episode, video_path, subtitles_dir=None, subtitles=True, embedd
     try:
         video = scan_video(video_path)
     except ValueError as e:
-        logger.warning(u'Unable to scan video: %s. Error: %s', video_path, e.message)
+        logger.warning(u'Unable to scan video: %s. Error: %r', video_path, e)
     else:
 
         # Add hash of our custom provider Itasa

@@ -1119,10 +1119,10 @@ class Series(TV):
                     cached_seasons[cur_season] = cached_show[cur_season]
                 except IndexerSeasonNotFound as error:
                     log.debug(
-                        u'{id}: {error_msg} (unaired/deleted) in the indexer {indexer} for {show}.'
+                        u'{id}: {error_msg!r} (unaired/deleted) in the indexer {indexer} for {show}.'
                         u' Removing existing records from database', {
                             'id': cur_show_id,
-                            'error_msg': error.message,
+                            'error_msg': error,
                             'indexer': indexerApi(self.indexer).name,
                             'show': cur_show_name,
                         }
@@ -1186,7 +1186,7 @@ class Series(TV):
         except IndexerException as error:
             log.warning(
                 u'{id}: {indexer} error, unable to update episodes.'
-                u' Message: {ex}', {
+                u' Message: {ex!r}', {
                     'id': self.series_id,
                     'indexer': indexerApi(self.indexer).name,
                     'ex': error,
@@ -1547,7 +1547,7 @@ class Series(TV):
             try:
                 country_codes = Tmdb().get_show_country_codes(tmdb_id)
             except IndexerException as error:
-                log.info(u'Unable to get country codes from TMDB. Error: {error}',
+                log.info(u'Unable to get country codes from TMDB. Error: {error!r}',
                          {'error': error})
                 country_codes = None
 
