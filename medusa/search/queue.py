@@ -586,6 +586,7 @@ class BacklogQueueItem(generic_queue.QueueItem):
 
                         # give the CPU a break
                         time.sleep(common.cpu_presets[app.CPU_PRESET])
+                        break
                 else:
                     log.info('No needed episodes found during backlog search for: {name}',
                              {'name': self.show.name})
