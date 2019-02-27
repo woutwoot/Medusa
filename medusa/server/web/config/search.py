@@ -45,7 +45,7 @@ class ConfigSearch(Config):
                    nzb_method=None, torrent_method=None, usenet_retention=None, download_propers=None,
                    check_propers_interval=None, allow_high_priority=None, sab_forced=None, remove_from_client=None,
                    randomize_providers=None, use_failed_downloads=None, delete_failed=None, propers_search_days=None,
-                   torrent_dir=None, torrent_username=None, torrent_password=None, torrent_host=None,
+                   torrent_dir=None, force_magnet=None, torrent_username=None, torrent_password=None, torrent_host=None,
                    torrent_label=None, torrent_label_anime=None, torrent_path=None, torrent_verify_cert=None,
                    torrent_seed_time=None, torrent_paused=None, torrent_high_bandwidth=None,
                    torrent_rpcurl=None, torrent_auth_type=None, ignore_words=None, torrent_checker_frequency=None,
@@ -63,6 +63,8 @@ class ConfigSearch(Config):
 
         if not config.change_TORRENT_DIR(torrent_dir):
             results += ['Unable to create directory {dir}, dir not changed.'.format(dir=os.path.normpath(torrent_dir))]
+
+        config.change_FORCE_MAGNET(force_magnet)
 
         config.change_DAILYSEARCH_FREQUENCY(dailysearch_frequency)
         config.change_TORRENT_CHECKER_FREQUENCY(torrent_checker_frequency)

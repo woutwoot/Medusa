@@ -244,6 +244,7 @@ class MedusaApp(object):
         self.MAX_CACHE_AGE = None
         self.TORRENT_METHOD = None
         self.TORRENT_DIR = None
+        self.FORCE_MAGNET = False
         self.DOWNLOAD_PROPERS = False
         self.CHECK_PROPERS_INTERVAL = None
         self.PROPERS_SEARCH_DAYS = 2

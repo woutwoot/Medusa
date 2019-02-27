@@ -173,6 +173,20 @@ def change_TORRENT_DIR(torrent_dir):
     return True
 
 
+def change_FORCE_MAGNET(force_magnet):
+    """
+    Change torrent directory
+
+    :param force_magnet: Whether or not to save magnet links in .magnet files
+    """
+    force_magnet = checkbox_to_value(force_magnet)
+
+    if app.FORCE_MAGNET == force_magnet:
+        return
+
+    app.force_magnet = force_magnet
+
+
 def change_TV_DOWNLOAD_DIR(tv_download_dir):
     """
     Change TV_DOWNLOAD directory (used by postprocessor)

@@ -655,6 +655,9 @@ window.app = new Vue({
                                             <file-browser name="torrent_dir" title="Select .torrent black hole location" :initial-dir="clients.torrents.dir" @update="clients.torrents.dir = $event"></file-browser>
                                             <p><b>.torrent</b> files are stored at this location for external software to find and use</p>
                                         </config-template>
+
+                                        <config-toggle-slider label="Download magnet links to .magnet files" id="force_magnet" :explanations="['Download magnet links to .magnet files']" ></config-toggle-slider>
+
                                         <input type="submit" class="btn-medusa config_submitter" value="Save Changes" /><br>
                                     </div>
 

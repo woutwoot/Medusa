@@ -136,6 +136,13 @@ class GenericProvider(object):
             if 'NO_DOWNLOAD_NAME' in url:
                 continue
 
+            if url.startswith('magnet'):
+                text_file = open(filename, "w")
+                text_file.write("%s" % url)
+                text_file.close()
+                log.debug('Saved result to {0}'.format(filename))
+                return True
+
             if url.startswith('http'):
                 self.headers.update({
                     'Referer': '/'.join(url.split('/')[:3]) + '/'
@@ -159,7 +166,7 @@ class GenericProvider(object):
 
         return False
 
-    def _make_url(self, result):
+    def _make_url(self, result, force_magnet=False):
         """Return url if result is a magnet link."""
         urls = []
         filename = ''
@@ -175,6 +182,12 @@ class GenericProvider(object):
         # A similar check is performed for NZB splitting in medusa/search/core.py @ search_providers()
         if (result.url.endswith(GenericProvider.TORRENT) or
                 result.url.startswith('magnet:')) and self.provider_type == GenericProvider.NZB:
+
+            # In case we want to save magnet links as .magnet files
+            if force_magnet:
+                filename = join(app.TORRENT_DIR, result_name + '.magnet')
+                return urls, filename
+
             filename = join(app.TORRENT_DIR, result_name + '.torrent')
             log.warning('Using Jackett providers as Newznab providers is deprecated!'
                         ' Switch them to Jackett providers as soon as possible.')
