@@ -166,7 +166,7 @@ class GenericProvider(object):
 
         return False
 
-    def _make_url(self, result, force_magnet=False):
+    def _make_url(self, result):
         """Return url if result is a magnet link."""
         urls = []
         filename = ''
@@ -184,7 +184,7 @@ class GenericProvider(object):
                 result.url.startswith('magnet:')) and self.provider_type == GenericProvider.NZB:
 
             # In case we want to save magnet links as .magnet files
-            if force_magnet:
+            if app.FORCE_MAGNET:
                 filename = join(app.TORRENT_DIR, result_name + '.magnet')
                 return urls, filename
 

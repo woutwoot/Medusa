@@ -616,6 +616,7 @@ class Application(object):
 
             app.NZB_DIR = check_setting_str(app.CFG, 'Blackhole', 'nzb_dir', '')
             app.TORRENT_DIR = check_setting_str(app.CFG, 'Blackhole', 'torrent_dir', '')
+            app.DOWNLOAD_PROPERS = bool(check_setting_int(app.CFG, 'Blackhole', 'force_magnet', 1))
 
             app.TV_DOWNLOAD_DIR = check_setting_str(app.CFG, 'General', 'tv_download_dir', '')
             app.PROCESS_AUTOMATICALLY = bool(check_setting_int(app.CFG, 'General', 'process_automatically', 0))
@@ -1585,6 +1586,7 @@ class Application(object):
         new_config['Blackhole'] = {}
         new_config['Blackhole']['nzb_dir'] = app.NZB_DIR
         new_config['Blackhole']['torrent_dir'] = app.TORRENT_DIR
+        new_config['Blackhole']['force_magnet'] = app.FORCE_MAGNET
 
         # dynamically save provider settings
         all_providers = providers.sorted_provider_list()
