@@ -656,7 +656,7 @@ window.app = new Vue({
                                             <p><b>.torrent</b> files are stored at this location for external software to find and use</p>
                                         </config-template>
 
-                                        <config-toggle-slider label="Save magnet links as .magnet files" id="force_magnet" v-model="clients.torrents.force_magnet" :explanations="['Save magnet links as .magnet files']"></config-toggle-slider>
+                                        <config-toggle-slider label="Save magnet links as .magnet files" id="force_magnet" v-model="clients.torrents.forceMagnet" :explanations="['Save magnet links as .magnet files']"></config-toggle-slider>
 
                                         <input type="submit" class="btn-medusa config_submitter" value="Save Changes" /><br>
                                     </div>

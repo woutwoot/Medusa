@@ -74,7 +74,7 @@ class ConfigHandler(BaseRequestHandler):
         'emby.enabled': BooleanField(app, 'USE_EMBY'),
         'clients.torrents.authType': StringField(app, 'TORRENT_AUTH_TYPE'),
         'clients.torrents.dir': StringField(app, 'TORRENT_DIR'),
-        'clients.torrents.force_magnet': BooleanField(app, 'FORCE_MAGNET'),
+        'clients.torrents.forceMagnet': BooleanField(app, 'FORCE_MAGNET'),
         'clients.torrents.enabled': BooleanField(app, 'USE_TORRENTS'),
         'clients.torrents.highBandwidth': BooleanField(app, 'TORRENT_HIGH_BANDWIDTH'),
         'clients.torrents.host': StringField(app, 'TORRENT_HOST'),
@@ -921,6 +921,7 @@ class DataGenerator(object):
         section_data['torrents'] = NonEmptyDict()
         section_data['torrents']['authType'] = app.TORRENT_AUTH_TYPE
         section_data['torrents']['dir'] = app.TORRENT_DIR
+        section_data['torrents']['forceMagnet'] = bool(app.FORCE_MAGNET)
         section_data['torrents']['enabled'] = bool(app.USE_TORRENTS)
         section_data['torrents']['highBandwidth'] = bool(app.TORRENT_HIGH_BANDWIDTH)
         section_data['torrents']['host'] = app.TORRENT_HOST
