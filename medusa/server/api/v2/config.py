@@ -74,6 +74,7 @@ class ConfigHandler(BaseRequestHandler):
         'emby.enabled': BooleanField(app, 'USE_EMBY'),
         'clients.torrents.authType': StringField(app, 'TORRENT_AUTH_TYPE'),
         'clients.torrents.dir': StringField(app, 'TORRENT_DIR'),
+        'clients.torrents.force_magnet': BooleanField(app, 'FORCE_MAGNET'),
         'clients.torrents.enabled': BooleanField(app, 'USE_TORRENTS'),
         'clients.torrents.highBandwidth': BooleanField(app, 'TORRENT_HIGH_BANDWIDTH'),
         'clients.torrents.host': StringField(app, 'TORRENT_HOST'),
